@@ -7,6 +7,7 @@ import { enqueue, canUserRequest, markUserRequest } from "./queue";
 import { getPresets, setActivePreset, getActivePresetId } from "./prompt";
 import { registerCommands, handleInteraction, handleAutocomplete, isChannelMuted } from "./commands";
 import { fetchUrlContext } from "./scrape";
+import { getUserContext, extractAndSave } from "./vault";
 import type { ImageData } from "./history";
 
 const IMAGE_MIMES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
@@ -138,7 +139,8 @@ async function triggerJudge(channelId: string, message: Message, channelName: st
       const ragResults = await rag.searchRelevant(cleanContent);
       ragHitCount = ragResults.length;
       const urlContext = await fetchUrlContext(cleanContent);
-      const ragContext = rag.formatContext(ragResults) + urlContext;
+      const vaultContext = getUserContext(message.author.displayName);
+      const ragContext = rag.formatContext(ragResults) + urlContext + vaultContext;
       return judgeAndReply(channelHistory, ragContext, message.author.id);
     });
 
@@ -167,6 +169,10 @@ async function triggerJudge(channelId: string, message: Message, channelName: st
     history.addMessage(channelId, { role: "assistant", content: reply });
     state.stats.repliesSent++;
     trackUser(message.author.id, message.author.displayName, true);
+
+    // Background: extract user info
+    const extractHistory = history.getHistory(channelId).slice(-10);
+    extractAndSave(message.author.displayName, extractHistory).catch(() => {});
 
     addLog({
       guild: guildName,
@@ -331,7 +337,8 @@ client.on("messageCreate", async (message: Message) => {
       const ragResults = await rag.searchRelevant(cleanContent);
       ragHitCount = ragResults.length;
       const urlContext = await fetchUrlContext(cleanContent);
-      const ragContext = rag.formatContext(ragResults) + urlContext;
+      const vaultContext = getUserContext(message.author.displayName);
+      const ragContext = rag.formatContext(ragResults) + urlContext + vaultContext;
       return getReply(channelHistory, ragContext, message.author.id);
     });
 
@@ -347,6 +354,10 @@ client.on("messageCreate", async (message: Message) => {
     await sendReply(reply);
     history.addMessage(channelId, { role: "assistant", content: reply });
     state.stats.repliesSent++;
+
+    // Background: extract user info from conversation
+    const extractHistory = history.getHistory(channelId).slice(-10);
+    extractAndSave(message.author.displayName, extractHistory).catch(() => {});
 
     if (lastLog) {
       lastLog.botReply = reply;
