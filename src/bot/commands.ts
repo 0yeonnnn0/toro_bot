@@ -13,6 +13,7 @@ import { getQueueStats } from "./queue";
 import { getStats as getRagStats } from "./rag";
 import { generateImage, type ImageModel } from "./draw";
 import { generateSpeech, VOICES, type VoiceName } from "./tts";
+import { readUserNote, listUserNotes, getVaultStats } from "./vault";
 
 // ── Command Definitions ──
 export const commands = [
@@ -83,6 +84,13 @@ export const commands = [
     ),
 
   new SlashCommandBuilder()
+    .setName("내정보")
+    .setDescription("봇이 기억하는 내 정보 확인")
+    .addUserOption(opt =>
+      opt.setName("user").setDescription("다른 유저 정보 확인 (선택)")
+    ),
+
+  new SlashCommandBuilder()
     .setName("mute")
     .setDescription("이 채널에서 봇 임시 정지/해제")
     .addIntegerOption(opt =>
@@ -148,6 +156,9 @@ export async function handleInteraction(interaction: ChatInputCommandInteraction
       break;
     case "say":
       await handleSay(interaction);
+      break;
+    case "내정보":
+      await handleMyInfo(interaction);
       break;
     case "mute":
       await handleMute(interaction);
@@ -240,6 +251,7 @@ async function handleStatus(interaction: ChatInputCommandInteraction): Promise<v
       { name: "Preset", value: preset?.name || presetId, inline: true },
       { name: "Queue", value: `${queue.activeCount}/${queue.maxConcurrent} active`, inline: true },
       { name: "RAG Vectors", value: `${rag.vectorCount}`, inline: true },
+      { name: "Vault Notes", value: `${getVaultStats().userNotes}`, inline: true },
     ],
   };
 
@@ -355,6 +367,34 @@ async function handleSay(interaction: ChatInputCommandInteraction): Promise<void
       await interaction.editReply("목소리 내다가 고장났다냥... @д@ " + msg);
     }
   }
+}
+
+// ── /내정보 ──
+async function handleMyInfo(interaction: ChatInputCommandInteraction): Promise<void> {
+  const target = interaction.options.getUser("user") || interaction.user;
+  const note = readUserNote(target.displayName);
+
+  if (!note) {
+    await interaction.reply({
+      content: `**${target.displayName}**에 대한 기록이 아직 없어`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // Strip frontmatter for display
+  const display = note.replace(/^---[\s\S]*?---\n*/, "").trim();
+  const truncated = display.length > 1800 ? display.slice(0, 1800) + "\n..." : display;
+
+  const embed = {
+    color: 0x6c8aff,
+    title: `📋 ${target.displayName}`,
+    description: truncated,
+    footer: { text: "TORO Vault" },
+    timestamp: new Date().toISOString(),
+  };
+
+  await interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
 // ── /reply ──
