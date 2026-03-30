@@ -362,17 +362,17 @@ export default function Settings() {
               <span className="panel-title">AI Model</span>
               <button className="btn btn-primary" onClick={saveModel}>Save</button>
             </div>
-            <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
               <select value={provider} onChange={e => {
                 setProvider(e.target.value)
                 setModel(MODEL_OPTIONS[e.target.value]?.[0]?.value || '')
-              }} className="model-select">
+              }} className="model-select" style={{ minWidth: 0, flex: '1 1 120px' }}>
                 <option value="google">Google Gemini</option>
                 <option value="openai">OpenAI</option>
                 <option value="anthropic">Anthropic</option>
               </select>
               <select value={model} onChange={e => setModel(e.target.value)}
-                className="model-select" style={{ flex: 1 }}>
+                className="model-select" style={{ minWidth: 0, flex: '2 1 180px' }}>
                 {models.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
               </select>
             </div>
@@ -418,7 +418,7 @@ export default function Settings() {
               <span className="panel-title">Reply Mode</span>
               <button className="btn btn-primary" onClick={saveReplyMode}>Save</button>
             </div>
-            <div style={{ display: 'flex', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }}>
+            <div style={{ display: 'flex', gap: 'var(--space-3)', marginBottom: 'var(--space-5)', flexWrap: 'wrap' }}>
               {[
                 { value: 'auto', label: '자동 (AI 판단)' },
                 { value: 'interval', label: '간격 모드' },
@@ -427,6 +427,7 @@ export default function Settings() {
                 <button
                   key={m.value}
                   className={`btn ${replyMode === m.value ? 'btn-primary' : 'btn-ghost'}`}
+                  style={{ flex: '1 1 auto' }}
                   onClick={() => setReplyMode(m.value)}
                 >
                   {m.label}

@@ -37,21 +37,21 @@ export default function Logs() {
   }
 
   const PaginationBar = ({ total, totalPages }: { total: number; totalPages: number }) => (
-    <div className="log-controls" style={{ justifyContent: 'space-between', marginTop: 'var(--space-4)' }}>
+    <div className="log-controls pagination-bar" style={{ justifyContent: 'space-between', marginTop: 'var(--space-4)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
         <span className="hint mono">{total}개 중 {page * perPage + 1}–{Math.min((page + 1) * perPage, total)}</span>
         <select value={perPage} onChange={e => { setPerPage(Number(e.target.value)); setPage(0) }}
-          className="model-select" style={{ padding: '2px 8px', fontSize: '0.75rem' }}>
+          className="model-select">
           <option value={20}>20개</option>
           <option value={30}>30개</option>
           <option value={40}>40개</option>
         </select>
       </div>
       <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-        <button className="btn btn-ghost" style={{ padding: '2px 10px', fontSize: '0.75rem' }}
+        <button className="btn btn-ghost"
           disabled={page === 0} onClick={() => setPage(p => p - 1)}>← 이전</button>
         <span className="hint mono" style={{ display: 'flex', alignItems: 'center' }}>{page + 1} / {totalPages}</span>
-        <button className="btn btn-ghost" style={{ padding: '2px 10px', fontSize: '0.75rem' }}
+        <button className="btn btn-ghost"
           disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>다음 →</button>
       </div>
     </div>
