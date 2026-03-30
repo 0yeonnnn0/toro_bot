@@ -1,17 +1,25 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { state, addLog, addEvent, addError, trackUser, trackKeywords, getTopKeywords, getUserStatsRanked } from "./state";
+
+// Mock log-store to avoid filesystem writes during tests
+vi.mock("./log-store", () => ({
+  appendLog: vi.fn(),
+  migrateLogs: vi.fn(),
+}));
+
+import { appendLog } from "./log-store";
 
 describe("state", () => {
   beforeEach(() => {
-    state.logs = [];
     state.events = [];
     state.errors = [];
     state.userStats = {};
     state.keywords = {};
+    vi.clearAllMocks();
   });
 
   describe("addLog", () => {
-    it("should add a log entry with timestamp", () => {
+    it("should call appendLog with timestamp", () => {
       addLog({
         guild: "test-guild",
         channel: "general",
@@ -23,22 +31,13 @@ describe("state", () => {
         responseTime: null,
         ragHits: 0,
         error: null,
+        model: null,
       });
 
-      expect(state.logs).toHaveLength(1);
-      expect(state.logs[0].channel).toBe("general");
-      expect(state.logs[0].timestamp).toBeTypeOf("number");
-    });
-
-    it("should cap logs at 200", () => {
-      for (let i = 0; i < 210; i++) {
-        addLog({
-          guild: "g", channel: "c", author: "a", content: `msg${i}`,
-          botReplied: false, triggerReason: null, botReply: null,
-          responseTime: null, ragHits: 0, error: null,
-        });
-      }
-      expect(state.logs.length).toBeLessThanOrEqual(200);
+      expect(appendLog).toHaveBeenCalledTimes(1);
+      const call = (appendLog as any).mock.calls[0][0];
+      expect(call.channel).toBe("general");
+      expect(call.timestamp).toBeTypeOf("number");
     });
   });
 
@@ -84,7 +83,6 @@ describe("state", () => {
 
     it("should filter stop words", () => {
       trackKeywords("나 진짜 그래");
-      // "나", "진짜", "그래" are all stop words or single char
       expect(state.keywords["진짜"]).toBeUndefined();
       expect(state.keywords["그래"]).toBeUndefined();
     });

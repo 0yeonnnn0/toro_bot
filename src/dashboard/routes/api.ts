@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import multer from "multer";
 import { client } from "../../bot/client";
 import { state, saveState, getTopKeywords, getUserStatsRanked } from "../../shared/state";
+import { readLogs, listLogDates } from "../../shared/log-store";
 import {
   getPresets, getPreset, getActivePresetId, setActivePreset,
   upsertPreset, deletePreset, togglePreset, reorderPresets, getActivePrompt,
@@ -175,12 +176,15 @@ router.put("/config", (req: Request, res: Response) => {
 });
 
 router.get("/logs", (req: Request, res: Response) => {
-  let logs = state.logs;
+  const date = (req.query.date as string) || new Date().toISOString().slice(0, 10);
+  let logs = readLogs(date);
   const channel = req.query.channel as string | undefined;
-  const limit = req.query.limit as string | undefined;
   if (channel) logs = logs.filter((l) => l.channel === channel);
-  if (limit) logs = logs.slice(-parseInt(limit));
   res.json(logs);
+});
+
+router.get("/log-dates", (_req: Request, res: Response) => {
+  res.json(listLogDates());
 });
 
 router.get("/user-stats", (_req: Request, res: Response) => res.json(getUserStatsRanked()));

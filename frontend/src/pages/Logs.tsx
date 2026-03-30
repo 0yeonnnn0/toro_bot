@@ -11,19 +11,25 @@ export default function Logs() {
   const [tab, setTab] = useState('messages')
   const [page, setPage] = useState(0)
   const [perPage, setPerPage] = useState(20)
+  const [logDate, setLogDate] = useState(new Date().toISOString().slice(0, 10))
+  const [logDates, setLogDates] = useState<string[]>([])
 
   const fetchData = () => {
-    fetch('/api/logs').then(r => r.json()).then(data => setLogs(data.reverse())).catch(() => {})
+    fetch(`/api/logs?date=${logDate}`).then(r => r.json()).then(data => setLogs(data.reverse())).catch(() => {})
     fetch('/api/events').then(r => r.json()).then(setEvents).catch(() => {})
     fetch('/api/errors').then(r => r.json()).then(setErrors).catch(() => {})
     fetch('/api/chat-logs?limit=200').then(r => r.json()).then(setChatLogs).catch(() => {})
   }
 
   useEffect(() => {
+    fetch('/api/log-dates').then(r => r.json()).then(setLogDates).catch(() => {})
+  }, [])
+
+  useEffect(() => {
     fetchData()
     const id = setInterval(fetchData, 5000)
     return () => clearInterval(id)
-  }, [])
+  }, [logDate])
 
   const channels = [...new Set(logs.map(l => l.channel))]
   const filtered = filter ? logs.filter(l => l.channel === filter) : logs
@@ -85,7 +91,14 @@ export default function Logs() {
       {/* Messages Tab */}
       {tab === 'messages' && (
         <>
-          <div className="log-controls">
+          <div className="log-controls" style={{ flexWrap: 'wrap' }}>
+            <select value={logDate} onChange={e => { setLogDate(e.target.value); setPage(0) }}>
+              {logDates.length > 0 ? logDates.map(d => (
+                <option key={d} value={d}>{d}</option>
+              )) : (
+                <option value={logDate}>{logDate}</option>
+              )}
+            </select>
             <select value={filter} onChange={e => setFilter(e.target.value)}>
               <option value="">All Channels</option>
               {channels.map(ch => <option key={ch} value={ch}>#{ch}</option>)}
