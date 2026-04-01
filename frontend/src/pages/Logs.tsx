@@ -11,19 +11,25 @@ export default function Logs() {
   const [tab, setTab] = useState('messages')
   const [page, setPage] = useState(0)
   const [perPage, setPerPage] = useState(20)
+  const [logDate, setLogDate] = useState(new Date().toISOString().slice(0, 10))
+  const [logDates, setLogDates] = useState<string[]>([])
 
   const fetchData = () => {
-    fetch('/api/logs').then(r => r.json()).then(data => setLogs(data.reverse())).catch(() => {})
+    fetch(`/api/logs?date=${logDate}`).then(r => r.json()).then(data => setLogs(data.reverse())).catch(() => {})
     fetch('/api/events').then(r => r.json()).then(setEvents).catch(() => {})
     fetch('/api/errors').then(r => r.json()).then(setErrors).catch(() => {})
     fetch('/api/chat-logs?limit=200').then(r => r.json()).then(setChatLogs).catch(() => {})
   }
 
   useEffect(() => {
+    fetch('/api/log-dates').then(r => r.json()).then(setLogDates).catch(() => {})
+  }, [])
+
+  useEffect(() => {
     fetchData()
     const id = setInterval(fetchData, 5000)
     return () => clearInterval(id)
-  }, [])
+  }, [logDate])
 
   const channels = [...new Set(logs.map(l => l.channel))]
   const filtered = filter ? logs.filter(l => l.channel === filter) : logs
@@ -37,21 +43,21 @@ export default function Logs() {
   }
 
   const PaginationBar = ({ total, totalPages }: { total: number; totalPages: number }) => (
-    <div className="log-controls" style={{ justifyContent: 'space-between', marginTop: 'var(--space-4)' }}>
+    <div className="log-controls pagination-bar" style={{ justifyContent: 'space-between', marginTop: 'var(--space-4)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
         <span className="hint mono">{total}개 중 {page * perPage + 1}–{Math.min((page + 1) * perPage, total)}</span>
         <select value={perPage} onChange={e => { setPerPage(Number(e.target.value)); setPage(0) }}
-          className="model-select" style={{ padding: '2px 8px', fontSize: '0.75rem' }}>
+          className="model-select">
           <option value={20}>20개</option>
           <option value={30}>30개</option>
           <option value={40}>40개</option>
         </select>
       </div>
       <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-        <button className="btn btn-ghost" style={{ padding: '2px 10px', fontSize: '0.75rem' }}
+        <button className="btn btn-ghost"
           disabled={page === 0} onClick={() => setPage(p => p - 1)}>← 이전</button>
         <span className="hint mono" style={{ display: 'flex', alignItems: 'center' }}>{page + 1} / {totalPages}</span>
-        <button className="btn btn-ghost" style={{ padding: '2px 10px', fontSize: '0.75rem' }}
+        <button className="btn btn-ghost"
           disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>다음 →</button>
       </div>
     </div>
@@ -85,7 +91,14 @@ export default function Logs() {
       {/* Messages Tab */}
       {tab === 'messages' && (
         <>
-          <div className="log-controls">
+          <div className="log-controls" style={{ flexWrap: 'wrap' }}>
+            <select value={logDate} onChange={e => { setLogDate(e.target.value); setPage(0) }}>
+              {logDates.length > 0 ? logDates.map(d => (
+                <option key={d} value={d}>{d}</option>
+              )) : (
+                <option value={logDate}>{logDate}</option>
+              )}
+            </select>
             <select value={filter} onChange={e => setFilter(e.target.value)}>
               <option value="">All Channels</option>
               {channels.map(ch => <option key={ch} value={ch}>#{ch}</option>)}

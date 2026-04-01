@@ -1,9 +1,9 @@
 import fs from "fs";
 import path from "path";
+import { appendLog, migrateLogs } from "./log-store";
 
 const DATA_DIR = path.join(__dirname, "../../data");
 const STATE_FILE = path.join(DATA_DIR, "state.json");
-const MAX_LOGS = 200;
 const MAX_EVENTS = 100;
 const SAVE_INTERVAL = 30000;
 
@@ -71,7 +71,6 @@ export interface State {
     repliesSent: number;
     startedAt: number;
   };
-  logs: LogEntry[];
   events: EventEntry[];
   errors: ErrorEntry[];
   userStats: Record<string, UserStat>;
@@ -116,12 +115,16 @@ export const state: State = {
     repliesSent: saved?.stats?.repliesSent ?? 0,
     startedAt: Date.now(),
   },
-  logs: saved?.logs ?? [],
   events: saved?.events ?? [],
   errors: saved?.errors ?? [],
   userStats: saved?.userStats ?? {},
   keywords: saved?.keywords ?? {},
 };
+
+// Migrate existing in-memory logs to file-based storage
+if ((saved as any)?.logs?.length > 0) {
+  migrateLogs((saved as any).logs);
+}
 
 // ── Save ──
 export function saveState(): void {
@@ -132,7 +135,6 @@ export function saveState(): void {
     fs.writeFileSync(STATE_FILE, JSON.stringify({
       config: state.config,
       stats: { messagesProcessed: state.stats.messagesProcessed, repliesSent: state.stats.repliesSent },
-      logs: state.logs,
       events: state.events,
       errors: state.errors,
       userStats: state.userStats,
@@ -149,8 +151,8 @@ process.on("SIGINT", () => { saveState(); process.exit(0); });
 
 // ── Log ──
 export function addLog(entry: Omit<LogEntry, "timestamp">): void {
-  state.logs.push({ timestamp: Date.now(), ...entry });
-  if (state.logs.length > MAX_LOGS) state.logs.shift();
+  const logEntry: LogEntry = { timestamp: Date.now(), ...entry };
+  appendLog(logEntry);
 }
 
 export function addEvent(type: string, detail: string = ""): void {

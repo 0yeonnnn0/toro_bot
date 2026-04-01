@@ -34,7 +34,7 @@ export default function Login() {
         </div>
       </nav>
       <main>
-        <div className="login-wrap">
+        <div className="login-wrap" style={{ padding: '0 var(--space-4)' }}>
           <div
             className="login-box"
             style={{

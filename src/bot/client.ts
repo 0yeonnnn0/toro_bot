@@ -293,12 +293,6 @@ client.on("messageCreate", async (message: Message) => {
   trackUser(message.author.id, message.author.displayName, true);
   markUserRequest(message.author.id);
 
-  const lastLog = state.logs[state.logs.length - 1];
-  if (lastLog) {
-    lastLog.botReplied = true;
-    lastLog.triggerReason = "mention";
-  }
-
   let waitingMsg: Message<boolean> | null = null;
   let waitingCancelled = false;
   let waitingSending = false;
@@ -359,12 +353,19 @@ client.on("messageCreate", async (message: Message) => {
     const extractHistory = history.getHistory(channelId).slice(-10);
     extractAndSave(message.author.displayName, extractHistory).catch(() => {});
 
-    if (lastLog) {
-      lastLog.botReply = reply;
-      lastLog.responseTime = responseTime;
-      lastLog.ragHits = ragHitCount;
-      lastLog.model = lastUsedModel;
-    }
+    addLog({
+      guild: guildName,
+      channel: channelName,
+      author: message.author.displayName,
+      content: cleanContent,
+      botReplied: true,
+      triggerReason: "mention",
+      botReply: reply,
+      responseTime,
+      ragHits: ragHitCount,
+      error: null,
+      model: lastUsedModel,
+    });
   } catch (err) {
     const responseTime = Date.now() - startTime;
     const isRateLimit = (err as Error).message?.includes("429") || (err as Error).message?.includes("quota");
@@ -375,10 +376,19 @@ client.on("messageCreate", async (message: Message) => {
       `channel: ${channelName}, guild: ${guildName}`
     );
 
-    if (lastLog) {
-      lastLog.responseTime = responseTime;
-      lastLog.error = isRateLimit ? "rate_limit" : "api_error";
-    }
+    addLog({
+      guild: guildName,
+      channel: channelName,
+      author: message.author.displayName,
+      content: cleanContent,
+      botReplied: false,
+      triggerReason: "mention",
+      botReply: null,
+      responseTime,
+      ragHits: 0,
+      error: isRateLimit ? "rate_limit" : "api_error",
+      model: null,
+    });
 
     await sendReply("뭔가 고장났다냥... @д@").catch(() => {});
   }
