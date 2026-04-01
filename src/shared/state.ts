@@ -57,6 +57,8 @@ export interface Config {
   webSystemPrompt: string;     // 웹 채팅 전용 추가 프롬프트
   // 이미지 인식
   imageRecognition: boolean;
+  // 임베딩 모델
+  embeddingModel: string;
   // API 키 (웹에서 관리, .env fallback)
   googleApiKey?: string;
   openaiApiKey?: string;
@@ -105,6 +107,7 @@ export const state: State = {
     webShowNickname: saved?.config?.webShowNickname ?? false,
     webSystemPrompt: saved?.config?.webSystemPrompt ?? "",
     imageRecognition: saved?.config?.imageRecognition ?? true,
+    embeddingModel: saved?.config?.embeddingModel ?? "text-embedding-004",
     googleApiKey: saved?.config?.googleApiKey ?? (process.env.GOOGLE_API_KEY || ""),
     openaiApiKey: saved?.config?.openaiApiKey ?? (process.env.OPENAI_API_KEY || ""),
     anthropicApiKey: saved?.config?.anthropicApiKey ?? (process.env.ANTHROPIC_API_KEY || ""),

@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { LocalIndex } from "vectra";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { state } from "../shared/state";
 
 const DATA_DIR = path.join(__dirname, "../../data/vectors");
 const HITS_FILE = path.join(__dirname, "../../data/rag-hits.json");
@@ -61,7 +62,8 @@ function getGenAI(): GoogleGenerativeAI {
 }
 
 async function getEmbedding(text: string): Promise<number[]> {
-  const model = getGenAI().getGenerativeModel({ model: "text-embedding-004" });
+  const embeddingModel = state.config.embeddingModel || "text-embedding-004";
+  const model = getGenAI().getGenerativeModel({ model: embeddingModel });
   const result = await model.embedContent(text);
   return result.embedding.values;
 }

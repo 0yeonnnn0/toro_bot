@@ -45,6 +45,7 @@ export default function Settings() {
   const [judgePrompt, setJudgePrompt] = useState('')
   const [defaultJudgePrompt, setDefaultJudgePrompt] = useState('')
   const [imageRecognition, setImageRecognition] = useState(true)
+  const [embeddingModel, setEmbeddingModel] = useState('text-embedding-004')
   const [webShowNickname, setWebShowNickname] = useState(false)
   const [webSystemPrompt, setWebSystemPrompt] = useState('')
   const [presets, setPresets] = useState<PresetInfo[]>([])
@@ -86,6 +87,7 @@ export default function Settings() {
       setJudgePrompt(d.judgePrompt || '')
       setDefaultJudgePrompt(d.defaultJudgePrompt || '')
       setImageRecognition(d.imageRecognition ?? true)
+      setEmbeddingModel(d.embeddingModel || 'text-embedding-004')
       setWebShowNickname(d.webShowNickname ?? false)
       setWebSystemPrompt(d.webSystemPrompt || '')
     }).catch(() => toast.error('설정 로드 실패'))
@@ -390,8 +392,18 @@ export default function Settings() {
               </div>
               <div className="model-info-item">
                 <span className="model-info-label">Embedding</span>
-                <span className="model-info-value mono">text-embedding-004</span>
-                <span className="model-info-badge fixed">고정</span>
+                <select value={embeddingModel} onChange={e => {
+                  setEmbeddingModel(e.target.value)
+                  fetch('/api/config', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ embeddingModel: e.target.value }),
+                  }).then(() => toast.success(`임베딩 모델: ${e.target.value}`)).catch(() => {})
+                }} className="model-select" style={{ flex: 1, minWidth: 0 }}>
+                  <option value="text-embedding-004">text-embedding-004</option>
+                  <option value="gemini-embedding-001">gemini-embedding-001</option>
+                  <option value="embedding-001">embedding-001</option>
+                </select>
               </div>
             </div>
 
