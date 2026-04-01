@@ -390,7 +390,7 @@ export default function Settings() {
               </div>
               <div className="model-info-item">
                 <span className="model-info-label">Embedding</span>
-                <span className="model-info-value mono">gemini-embedding-002</span>
+                <span className="model-info-value mono">text-embedding-004</span>
                 <span className="model-info-badge fixed">고정</span>
               </div>
             </div>
