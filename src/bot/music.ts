@@ -114,6 +114,13 @@ export function getAutoplay(guildId: string): { enabled: boolean; genre: string 
   return { enabled: queue?.autoplay || false, genre: queue?.autoplayGenre || null };
 }
 
+export async function triggerAutoplayNow(guildId: string): Promise<void> {
+  const queue = queues.get(guildId);
+  if (!queue || !queue.autoplay || queue.tracks.length === 0) return;
+  const current = queue.tracks[0];
+  await autoplayNext(guildId, current);
+}
+
 export function isPlaying(guildId: string): boolean {
   return queues.get(guildId)?.playing || false;
 }

@@ -21,7 +21,7 @@ import { getStats as getRagStats } from "./rag";
 import { generateImage, type ImageModel } from "./draw";
 import { generateSpeech, VOICES, type VoiceName } from "./tts";
 import { readUserNote, listUserNotes, getVaultStats } from "./vault";
-import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, removeTrack, setAutoplay, getAutoplay, type Track } from "./music";
+import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, removeTrack, setAutoplay, getAutoplay, triggerAutoplayNow, type Track } from "./music";
 
 // ── Command Definitions ──
 export const commands = [
@@ -810,7 +810,8 @@ async function handleAutoplay(interaction: ChatInputCommandInteraction): Promise
 
   if (enabled) {
     const label = genreValue ? `**${genreValue}** 장르` : "**아티스트 기반**";
-    await interaction.reply(`자동 추천 재생 **켜짐** (${label}) — 대기열 끝나면 3곡씩 자동 추가`);
+    await interaction.reply(`자동 추천 재생 **켜짐** (${label}) — 3곡 추가 중...`);
+    triggerAutoplayNow(interaction.guildId!).catch(() => {});
   } else {
     await interaction.reply("먼저 음악을 재생해줘");
   }
