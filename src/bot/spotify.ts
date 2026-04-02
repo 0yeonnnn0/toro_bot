@@ -42,20 +42,22 @@ export async function getRecommendations(title: string, artist: string | null, l
     const seedArtist = seedTrack.artists[0]?.id;
 
     // 2. 추천 요청
-    const rec = await spotify.getRecommendations({
+    const seedOptions: any = {
       seed_tracks: [seedTrack.id],
-      seed_artists: seedArtist ? [seedArtist] : undefined,
       limit,
       market: "KR",
-    });
+    };
+    if (seedArtist) seedOptions.seed_artists = [seedArtist];
+    const rec = await spotify.getRecommendations(seedOptions);
 
     return rec.body.tracks.map(t => ({
       title: t.name,
       artist: t.artists.map(a => a.name).join(", "),
       query: `${t.artists[0]?.name || ""} ${t.name}`,
     }));
-  } catch (err) {
-    console.error("Spotify 추천 실패:", (err as Error).message);
+  } catch (err: any) {
+    const msg = err?.body?.error?.message || err?.message || JSON.stringify(err);
+    console.error("Spotify 추천 실패:", msg, "| status:", err?.statusCode || err?.status || "unknown");
     return [];
   }
 }
