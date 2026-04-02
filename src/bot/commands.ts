@@ -573,16 +573,16 @@ async function handlePlay(interaction: ChatInputCommandInteraction): Promise<voi
       return;
     }
 
-    const allResults = await searchTracks(query, interaction.user.displayName, SEARCH_TOTAL);
-    // play-dl이 limit+5개 검색하므로 실제로 15~20개까지 나올 수 있음
+    const firstResults = await searchTracks(query, interaction.user.displayName, SEARCH_PER_PAGE);
 
-    if (allResults.length === 0) {
+    if (firstResults.length === 0) {
       await interaction.editReply("검색 결과가 없다냥... @д@");
       return;
     }
 
+    let allResults = firstResults;
     let page = 0;
-    await showSearchPage(interaction, voiceChannel, query, allResults, page);
+    await showSearchPage(interaction, voiceChannel, query, allResults, page, true);
   } catch (err) {
     await interaction.editReply(`에러 발생... @д@ ${(err as Error).message}`);
   }
@@ -594,10 +594,11 @@ async function showSearchPage(
   query: string,
   allResults: Track[],
   page: number,
+  canLoadMore: boolean = true,
 ): Promise<void> {
   const start = page * SEARCH_PER_PAGE;
   const pageResults = allResults.slice(start, start + SEARCH_PER_PAGE);
-  const hasMore = start + SEARCH_PER_PAGE < allResults.length;
+  const hasMore = canLoadMore && page < 2; // 최대 3페이지
 
   const list = pageResults.map((t, i) =>
     `**${start + i + 1}.** [${t.title}](${t.url}) (${t.duration})`
@@ -648,7 +649,13 @@ async function showSearchPage(
 
     if (btnInteraction.customId === "play_more") {
       await btnInteraction.deferUpdate();
-      await showSearchPage(interaction, voiceChannel, query, allResults, page + 1);
+      // 추가 5개 검색
+      const moreResults = await searchTracks(query, interaction.user.displayName, SEARCH_PER_PAGE * (page + 2));
+      // 기존 결과와 합치되 중복 제거
+      for (const r of moreResults) {
+        if (!allResults.some(a => a.url === r.url)) allResults.push(r);
+      }
+      await showSearchPage(interaction, voiceChannel, query, allResults, page + 1, allResults.length > (page + 2) * SEARCH_PER_PAGE);
 
     } else if (btnInteraction.customId === "play_url") {
       const modal = new ModalBuilder()

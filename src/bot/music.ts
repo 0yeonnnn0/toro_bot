@@ -171,7 +171,7 @@ export async function searchTracks(query: string, requestedBy: string, limit: nu
       proc.stderr.on("data", () => {});
       proc.on("error", reject);
       proc.on("close", (code) => code === 0 ? resolve(out) : reject(new Error("yt search failed")));
-      setTimeout(() => { proc.kill(); reject(new Error("timeout")); }, 30000);
+      setTimeout(() => { proc.kill(); reject(new Error("timeout")); }, 45000);
     });
 
     const lines = searchResults.trim().split("\n");
