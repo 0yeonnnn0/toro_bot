@@ -376,6 +376,7 @@ async function autoplayNext(guildId: string, lastTrack: Track): Promise<void> {
           if (sec > MAX_DURATION_SEC) continue;
           if (queue.playedUrls.has(url)) continue;
           if (queue.playedTitles.has(normTitle(title))) continue;
+          if (queue.tracks.some(t => t.url === url || normTitle(t.title) === normTitle(title))) continue;
           if (added.some(a => normTitle(a.title) === normTitle(title))) continue;
 
           added.push({
@@ -432,6 +433,7 @@ async function autoplayNext(guildId: string, lastTrack: Track): Promise<void> {
           if (sec > MAX_DURATION_SEC) continue;
           if (queue.playedUrls.has(r.url)) continue;
           if (queue.playedTitles.has(normTitle(title))) continue;
+          if (queue.tracks.some(t => t.url === r.url || normTitle(t.title) === normTitle(title))) continue;
           if (added.some(a => a.url === r.url || normTitle(a.title) === normTitle(title))) continue;
 
           added.push({
