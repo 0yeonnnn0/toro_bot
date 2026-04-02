@@ -159,38 +159,17 @@ export async function searchTracks(query: string, requestedBy: string, limit: nu
       }];
     }
 
-    // yt-dlp로 유튜브 검색
-    const searchResults = await new Promise<string>((resolve, reject) => {
-      const proc = spawn("yt-dlp", [
-        `ytsearch${limit}:${query}`,
-        "--get-title", "--get-id", "--get-duration",
-        "--no-warnings", "--quiet",
-      ]);
-      let out = "";
-      proc.stdout.on("data", (d) => out += d.toString());
-      proc.stderr.on("data", () => {});
-      proc.on("error", reject);
-      proc.on("close", (code) => code === 0 ? resolve(out) : reject(new Error("yt search failed")));
-      setTimeout(() => { proc.kill(); reject(new Error("timeout")); }, 30000);
-    });
-
-    const lines = searchResults.trim().split("\n");
-    const tracks: Track[] = [];
-    for (let i = 0; i + 2 < lines.length; i += 3) {
-      const title = lines[i];
-      const id = lines[i + 1];
-      const sec = parseDurationStr(lines[i + 2] || "0");
-      if (!title || !id) continue;
-      if (sec > MAX_DURATION_SEC) continue;
-      tracks.push({
-        title,
-        url: `https://www.youtube.com/watch?v=${id}`,
-        duration: formatDuration(sec),
-        thumbnail: "",
+    const results = await play.search(query, { limit, source: { youtube: "video" } });
+    return results
+      .filter(info => (info.durationInSec || 0) <= MAX_DURATION_SEC)
+      .slice(0, limit)
+      .map(info => ({
+        title: info.title || "Unknown",
+        url: info.url,
+        duration: formatDuration(info.durationInSec || 0),
+        thumbnail: info.thumbnails?.[0]?.url || "",
         requestedBy,
-      });
-    }
-    return tracks.slice(0, limit);
+      }));
   } catch (err) {
     console.error("유튜브 검색 실패:", (err as Error).message);
     return [];

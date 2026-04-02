@@ -574,7 +574,6 @@ async function handlePlay(interaction: ChatInputCommandInteraction): Promise<voi
     }
 
     const allResults = await searchTracks(query, interaction.user.displayName, SEARCH_TOTAL);
-    // play-dl이 limit+5개 검색하므로 실제로 15~20개까지 나올 수 있음
 
     if (allResults.length === 0) {
       await interaction.editReply("검색 결과가 없다냥... @д@");
