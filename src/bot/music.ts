@@ -121,10 +121,24 @@ export function isPlaying(guildId: string): boolean {
 
 const MAX_DURATION_SEC = 20 * 60; // 20분
 
+function cleanYoutubeUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes("youtube.com") && u.searchParams.has("v")) {
+      return `https://www.youtube.com/watch?v=${u.searchParams.get("v")}`;
+    }
+    if (u.hostname === "youtu.be") {
+      return `https://www.youtube.com/watch?v=${u.pathname.slice(1)}`;
+    }
+  } catch {}
+  return url;
+}
+
 export async function searchTracks(query: string, requestedBy: string, limit: number = 5): Promise<Track[]> {
   try {
-    if (play.yt_validate(query) === "video") {
-      const details = await play.video_basic_info(query);
+    const cleaned = cleanYoutubeUrl(query);
+    if (play.yt_validate(cleaned) === "video") {
+      const details = await play.video_basic_info(cleaned);
       const info = details.video_details;
       const sec = info.durationInSec || 0;
       if (sec > MAX_DURATION_SEC) return [];
