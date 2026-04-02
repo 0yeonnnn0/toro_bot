@@ -249,8 +249,14 @@ export async function playTrackDirect(
     queue.leaveTimer = null;
   }
 
-  queue.tracks.push(track);
-  const position = queue.tracks.length;
+  // 유저 곡은 autoplay 곡들 앞에 삽입
+  const firstAutoplayIdx = queue.tracks.findIndex((t, i) => i > 0 && t.requestedBy.startsWith("Autoplay"));
+  if (firstAutoplayIdx > 0) {
+    queue.tracks.splice(firstAutoplayIdx, 0, track);
+  } else {
+    queue.tracks.push(track);
+  }
+  const position = queue.tracks.indexOf(track) + 1;
 
   if (!queue.playing) {
     await playNext(channel.guild.id);
