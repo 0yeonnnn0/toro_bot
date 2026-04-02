@@ -56,9 +56,9 @@ export async function playTrack(
 
 export function skip(guildId: string): Track | null {
   const queue = queues.get(guildId);
-  if (!queue || !queue.playing) return null;
-  const skipped = queue.tracks[0] || null;
-  queue.player.stop(); // Idle 이벤트가 다음 곡 재생 트리거
+  if (!queue || !queue.playing || queue.tracks.length === 0) return null;
+  const skipped = queue.tracks[0];
+  queue.player.stop(true); // Idle 이벤트가 shift + 다음 곡 재생 트리거
   return skipped;
 }
 
@@ -211,8 +211,10 @@ export async function playTrackDirect(
       if (q.tracks.length > 0) {
         playNext(channel.guild.id);
       } else if (q.autoplay && finished) {
-        // 자동 추천
-        autoplayNext(channel.guild.id, finished).catch(() => {});
+        q.playing = false;
+        autoplayNext(channel.guild.id, finished).catch(() => {
+          q.leaveTimer = setTimeout(() => disconnect(channel.guild.id), LEAVE_TIMEOUT);
+        });
       } else {
         q.playing = false;
         q.leaveTimer = setTimeout(() => disconnect(channel.guild.id), LEAVE_TIMEOUT);
@@ -221,10 +223,10 @@ export async function playTrackDirect(
 
     player.on("error", (err) => {
       console.error("음악 재생 에러:", err.message);
+      // 에러 시 다음 곡으로 — Idle 이벤트가 처리하도록 player.stop()만
       const q = queues.get(channel.guild.id);
-      if (q && q.tracks.length > 1) {
-        q.tracks.shift();
-        playNext(channel.guild.id);
+      if (q && q.tracks.length > 0) {
+        q.player.stop();
       }
     });
 
