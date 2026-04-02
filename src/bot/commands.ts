@@ -525,7 +525,7 @@ async function handlePlay(interaction: ChatInputCommandInteraction): Promise<voi
   await interaction.deferReply();
 
   try {
-    const results = await searchTracks(query, interaction.user.displayName, 5);
+    const results = await searchTracks(query, interaction.user.displayName, 4);
 
     if (results.length === 0) {
       await interaction.editReply("검색 결과가 없다냥... @д@");
