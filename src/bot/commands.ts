@@ -21,7 +21,7 @@ import { getStats as getRagStats } from "./rag";
 import { generateImage, type ImageModel } from "./draw";
 import { generateSpeech, VOICES, type VoiceName } from "./tts";
 import { readUserNote, listUserNotes, getVaultStats } from "./vault";
-import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, type Track } from "./music";
+import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, removeTrack, type Track } from "./music";
 
 // ── Command Definitions ──
 export const commands = [
@@ -154,6 +154,13 @@ export const commands = [
   new SlashCommandBuilder()
     .setName("nowplaying")
     .setDescription("현재 재생 중인 곡"),
+
+  new SlashCommandBuilder()
+    .setName("remove")
+    .setDescription("대기열에서 곡 제거")
+    .addIntegerOption(opt =>
+      opt.setName("번호").setDescription("제거할 곡 번호 (/queue에서 확인)").setRequired(true).setMinValue(1)
+    ),
 ];
 
 // ── Register Commands ──
@@ -222,6 +229,9 @@ export async function handleInteraction(interaction: ChatInputCommandInteraction
       break;
     case "nowplaying":
       await handleNowPlaying(interaction);
+      break;
+    case "remove":
+      await handleRemove(interaction);
       break;
   }
 }
@@ -719,6 +729,21 @@ async function handleNowPlaying(interaction: ChatInputCommandInteraction): Promi
   };
 
   await interaction.reply({ embeds: [embed] });
+}
+
+// ── /remove ──
+async function handleRemove(interaction: ChatInputCommandInteraction): Promise<void> {
+  const guildId = interaction.guildId;
+  if (!guildId) return;
+
+  const index = interaction.options.getInteger("번호", true);
+  const removed = removeTrack(guildId, index);
+
+  if (removed) {
+    await interaction.reply(`**${removed.title}** 대기열에서 제거`);
+  } else {
+    await interaction.reply({ content: `${index}번 곡을 찾을 수 없어. \`/queue\`로 확인해봐`, ephemeral: true });
+  }
 }
 
 // ── Autocomplete ──

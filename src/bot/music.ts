@@ -84,6 +84,12 @@ export function getNowPlaying(guildId: string): Track | null {
   return queue.tracks[0];
 }
 
+export function removeTrack(guildId: string, index: number): Track | null {
+  const queue = queues.get(guildId);
+  if (!queue || index < 1 || index >= queue.tracks.length) return null;
+  return queue.tracks.splice(index, 1)[0];
+}
+
 export function isPlaying(guildId: string): boolean {
   return queues.get(guildId)?.playing || false;
 }
