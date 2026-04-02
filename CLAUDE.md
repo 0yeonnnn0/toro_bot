@@ -28,6 +28,21 @@ git push origin main
 
 `develop` → CI (typecheck + test + frontend build) → merge to `main` → Docker image build+push → Watchtower pulls on NAS automatically.
 
+### Git branching
+
+기능 개발 시 `develop`에서 직접 작업하지 말고, **기능별 브랜치를 새로 파서** 진행한다.
+
+```bash
+git checkout develop
+git checkout -b feat/기능이름      # 브랜치 생성
+# 작업 후
+git push origin feat/기능이름
+gh pr create --base develop        # develop으로 PR
+# 머지 후 develop → main PR로 배포
+```
+
+브랜치 네이밍: `feat/기능`, `fix/버그`, `docs/문서`, `refactor/리팩토링`
+
 ## Important files
 
 ### Backend (`src/`)
