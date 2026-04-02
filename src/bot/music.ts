@@ -40,78 +40,10 @@ export async function playTrack(
   query: string,
   requestedBy: string,
 ): Promise<{ track: Track; position: number }> {
-  const track = await searchTrack(query, requestedBy);
-  if (!track) throw new Error("노래를 찾을 수 없어");
-
-  let queue = queues.get(channel.guild.id);
-
-  if (!queue) {
-    const connection = joinVoiceChannel({
-      channelId: channel.id,
-      guildId: channel.guild.id,
-      adapterCreator: channel.guild.voiceAdapterCreator,
-    });
-
-    const player = createAudioPlayer();
-    connection.subscribe(player);
-
-    queue = {
-      tracks: [],
-      player,
-      connection,
-      playing: false,
-      leaveTimer: null,
-    };
-    queues.set(channel.guild.id, queue);
-
-    // 곡 끝나면 다음 곡 재생
-    player.on(AudioPlayerStatus.Idle, () => {
-      const q = queues.get(channel.guild.id);
-      if (!q) return;
-      q.tracks.shift(); // 현재 곡 제거
-      if (q.tracks.length > 0) {
-        playNext(channel.guild.id);
-      } else {
-        q.playing = false;
-        // 5분 후 자동 퇴장
-        q.leaveTimer = setTimeout(() => {
-          disconnect(channel.guild.id);
-        }, LEAVE_TIMEOUT);
-      }
-    });
-
-    player.on("error", (err) => {
-      console.error("음악 재생 에러:", err.message);
-      const q = queues.get(channel.guild.id);
-      if (q && q.tracks.length > 1) {
-        q.tracks.shift();
-        playNext(channel.guild.id);
-      }
-    });
-
-    // 연결 끊기면 정리
-    connection.on(VoiceConnectionStatus.Disconnected, async () => {
-      try {
-        await entersState(connection, VoiceConnectionStatus.Connecting, 5000);
-      } catch {
-        disconnect(channel.guild.id);
-      }
-    });
-  }
-
-  // 타이머 취소
-  if (queue.leaveTimer) {
-    clearTimeout(queue.leaveTimer);
-    queue.leaveTimer = null;
-  }
-
-  queue.tracks.push(track);
-  const position = queue.tracks.length;
-
-  if (!queue.playing) {
-    await playNext(channel.guild.id);
-  }
-
+  const tracks = await searchTracks(query, requestedBy, 1);
+  if (tracks.length === 0) throw new Error("노래를 찾을 수 없어");
+  const track = tracks[0];
+  const position = await playTrackDirect(channel, track);
   return { track, position };
 }
 
@@ -156,32 +88,102 @@ export function isPlaying(guildId: string): boolean {
 
 // ── Internal ──
 
-async function searchTrack(query: string, requestedBy: string): Promise<Track | null> {
+export async function searchTracks(query: string, requestedBy: string, limit: number = 5): Promise<Track[]> {
   try {
-    let info;
-
     if (play.yt_validate(query) === "video") {
-      // 직접 URL
       const details = await play.video_basic_info(query);
-      info = details.video_details;
-    } else {
-      // 검색
-      const results = await play.search(query, { limit: 1, source: { youtube: "video" } });
-      if (results.length === 0) return null;
-      info = results[0];
+      const info = details.video_details;
+      return [{
+        title: info.title || "Unknown",
+        url: info.url,
+        duration: formatDuration(info.durationInSec || 0),
+        thumbnail: info.thumbnails?.[0]?.url || "",
+        requestedBy,
+      }];
     }
 
-    return {
+    const results = await play.search(query, { limit, source: { youtube: "video" } });
+    return results.map(info => ({
       title: info.title || "Unknown",
       url: info.url,
       duration: formatDuration(info.durationInSec || 0),
       thumbnail: info.thumbnails?.[0]?.url || "",
       requestedBy,
-    };
+    }));
   } catch (err) {
     console.error("유튜브 검색 실패:", (err as Error).message);
-    return null;
+    return [];
   }
+}
+
+export async function playTrackDirect(
+  channel: VoiceBasedChannel,
+  track: Track,
+): Promise<number> {
+  let queue = queues.get(channel.guild.id);
+
+  if (!queue) {
+    const connection = joinVoiceChannel({
+      channelId: channel.id,
+      guildId: channel.guild.id,
+      adapterCreator: channel.guild.voiceAdapterCreator,
+    });
+
+    const player = createAudioPlayer();
+    connection.subscribe(player);
+
+    queue = {
+      tracks: [],
+      player,
+      connection,
+      playing: false,
+      leaveTimer: null,
+    };
+    queues.set(channel.guild.id, queue);
+
+    player.on(AudioPlayerStatus.Idle, () => {
+      const q = queues.get(channel.guild.id);
+      if (!q) return;
+      q.tracks.shift();
+      if (q.tracks.length > 0) {
+        playNext(channel.guild.id);
+      } else {
+        q.playing = false;
+        q.leaveTimer = setTimeout(() => disconnect(channel.guild.id), LEAVE_TIMEOUT);
+      }
+    });
+
+    player.on("error", (err) => {
+      console.error("음악 재생 에러:", err.message);
+      const q = queues.get(channel.guild.id);
+      if (q && q.tracks.length > 1) {
+        q.tracks.shift();
+        playNext(channel.guild.id);
+      }
+    });
+
+    connection.on(VoiceConnectionStatus.Disconnected, async () => {
+      try {
+        await entersState(connection, VoiceConnectionStatus.Connecting, 5000);
+      } catch {
+        disconnect(channel.guild.id);
+      }
+    });
+  }
+
+  if (queue.leaveTimer) {
+    clearTimeout(queue.leaveTimer);
+    queue.leaveTimer = null;
+  }
+
+  queue.tracks.push(track);
+  const position = queue.tracks.length;
+
+  if (!queue.playing) {
+    await playNext(channel.guild.id);
+  }
+
+  return position;
 }
 
 async function playNext(guildId: string): Promise<void> {

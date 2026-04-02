@@ -5,6 +5,13 @@ import {
   Routes,
   TextChannel,
   ChannelType,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ComponentType,
 } from "discord.js";
 import { getPresets, setActivePreset, getActivePresetId, getPreset } from "./prompt";
 import { getReply } from "./ai";
@@ -14,7 +21,7 @@ import { getStats as getRagStats } from "./rag";
 import { generateImage, type ImageModel } from "./draw";
 import { generateSpeech, VOICES, type VoiceName } from "./tts";
 import { readUserNote, listUserNotes, getVaultStats } from "./vault";
-import { playTrack, skip, stop as musicStop, pause, getQueue, getNowPlaying } from "./music";
+import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, type Track } from "./music";
 
 // ── Command Definitions ──
 export const commands = [
@@ -518,21 +525,120 @@ async function handlePlay(interaction: ChatInputCommandInteraction): Promise<voi
   await interaction.deferReply();
 
   try {
-    const { track, position } = await playTrack(voiceChannel, query, interaction.user.displayName);
+    const results = await searchTracks(query, interaction.user.displayName, 5);
+
+    if (results.length === 0) {
+      await interaction.editReply("검색 결과가 없다냥... @д@");
+      return;
+    }
+
+    // URL 직접 입력이면 바로 재생
+    if (results.length === 1 && query.includes("youtube.com/") || query.includes("youtu.be/")) {
+      const position = await playTrackDirect(voiceChannel, results[0]);
+      await interaction.editReply({ embeds: [makePlayEmbed(results[0], position)] });
+      return;
+    }
+
+    // 검색 결과 목록 표시
+    const list = results.map((t, i) =>
+      `**${i + 1}.** [${t.title}](${t.url}) (${t.duration})`
+    ).join("\n");
+
     const embed = {
       color: 0x3182f6,
-      title: position === 1 ? "Now Playing" : `#${position} 대기열 추가`,
-      description: `**[${track.title}](${track.url})**`,
-      fields: [
-        { name: "길이", value: track.duration, inline: true },
-        { name: "요청", value: track.requestedBy, inline: true },
-      ],
-      thumbnail: track.thumbnail ? { url: track.thumbnail } : undefined,
+      title: `"${query}" 검색 결과`,
+      description: list,
+      footer: { text: "30초 안에 선택해줘" },
     };
-    await interaction.editReply({ embeds: [embed] });
+
+    // 1~5번 버튼 + URL 직접 입력 버튼
+    const buttons = results.map((_, i) =>
+      new ButtonBuilder()
+        .setCustomId(`play_${i}`)
+        .setLabel(`${i + 1}`)
+        .setStyle(ButtonStyle.Primary)
+    );
+    buttons.push(
+      new ButtonBuilder()
+        .setCustomId("play_url")
+        .setLabel("URL 입력")
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
+    const msg = await interaction.editReply({ embeds: [embed], components: [row] });
+
+    // 버튼 클릭 대기 (30초)
+    try {
+      const btnInteraction = await msg.awaitMessageComponent({
+        componentType: ComponentType.Button,
+        filter: (i) => i.user.id === interaction.user.id,
+        time: 30000,
+      });
+
+      if (btnInteraction.customId === "play_url") {
+        // URL 입력 모달
+        const modal = new ModalBuilder()
+          .setCustomId("play_url_modal")
+          .setTitle("유튜브 URL 입력")
+          .addComponents(
+            new ActionRowBuilder<TextInputBuilder>().addComponents(
+              new TextInputBuilder()
+                .setCustomId("url_input")
+                .setLabel("유튜브 URL")
+                .setPlaceholder("https://youtube.com/watch?v=...")
+                .setStyle(TextInputStyle.Short)
+                .setRequired(true)
+            )
+          );
+
+        await btnInteraction.showModal(modal);
+
+        try {
+          const modalInteraction = await btnInteraction.awaitModalSubmit({ time: 60000 });
+          const url = modalInteraction.fields.getTextInputValue("url_input");
+          const tracks = await searchTracks(url, interaction.user.displayName, 1);
+
+          if (tracks.length === 0) {
+            await modalInteraction.reply({ content: "URL을 찾을 수 없어", ephemeral: true });
+            await interaction.editReply({ embeds: [embed], components: [] });
+            return;
+          }
+
+          const position = await playTrackDirect(voiceChannel, tracks[0]);
+          await modalInteraction.reply({ embeds: [makePlayEmbed(tracks[0], position)] });
+          await interaction.editReply({ embeds: [embed], components: [] });
+        } catch {
+          await interaction.editReply({ embeds: [embed], components: [] });
+        }
+      } else {
+        // 번호 선택
+        const idx = parseInt(btnInteraction.customId.split("_")[1]);
+        const track = results[idx];
+        const position = await playTrackDirect(voiceChannel, track);
+
+        await btnInteraction.update({ embeds: [makePlayEmbed(track, position)], components: [] });
+      }
+    } catch {
+      // 타임아웃 — 버튼 제거
+      await interaction.editReply({ embeds: [embed], components: [] }).catch(() => {});
+    }
   } catch (err) {
-    await interaction.editReply(`노래를 찾을 수 없다냥... @д@ ${(err as Error).message}`);
+    await interaction.editReply(`에러 발생... @д@ ${(err as Error).message}`);
   }
+}
+
+function makePlayEmbed(track: Track, position: number) {
+  return {
+    color: 0x3182f6,
+    title: position === 1 ? "Now Playing" : `#${position} 대기열 추가`,
+    description: `**[${track.title}](${track.url})**`,
+    fields: [
+      { name: "길이", value: track.duration, inline: true },
+      { name: "요청", value: track.requestedBy, inline: true },
+    ],
+    thumbnail: track.thumbnail ? { url: track.thumbnail } : undefined,
+  };
 }
 
 // ── /skip ──
