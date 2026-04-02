@@ -126,7 +126,7 @@ export function isPlaying(guildId: string): boolean {
 
 // ── Internal ──
 
-const MAX_DURATION_SEC = 20 * 60; // 20분
+const MAX_DURATION_SEC = 15 * 60; // 15분
 
 function cleanYoutubeUrl(url: string): string {
   try {
