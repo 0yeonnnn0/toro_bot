@@ -6,10 +6,12 @@ import {
   VoiceConnectionStatus,
   entersState,
   getVoiceConnection,
+  StreamType,
   type AudioPlayer,
   type VoiceConnection,
 } from "@discordjs/voice";
 import play from "play-dl";
+import { spawn } from "child_process";
 import type { VoiceBasedChannel } from "discord.js";
 
 // ── Types ──
@@ -193,8 +195,30 @@ async function playNext(guildId: string): Promise<void> {
   const track = queue.tracks[0];
 
   try {
-    const stream = await play.stream(track.url);
-    const resource = createAudioResource(stream.stream, { inputType: stream.type });
+    // yt-dlp로 오디오 스트림 추출 → FFmpeg로 opus 변환
+    const ytdlp = spawn("yt-dlp", [
+      "-f", "bestaudio",
+      "-o", "-",
+      "--no-warnings",
+      "--quiet",
+      track.url,
+    ]);
+
+    const ffmpeg = spawn("ffmpeg", [
+      "-i", "pipe:0",
+      "-analyzeduration", "0",
+      "-loglevel", "0",
+      "-f", "opus",
+      "-ar", "48000",
+      "-ac", "2",
+      "pipe:1",
+    ]);
+
+    ytdlp.stdout.pipe(ffmpeg.stdin);
+    ytdlp.stderr.on("data", (d) => console.error("yt-dlp:", d.toString().trim()));
+    ffmpeg.stderr.on("data", (d) => console.error("ffmpeg:", d.toString().trim()));
+
+    const resource = createAudioResource(ffmpeg.stdout, { inputType: StreamType.OggOpus });
     queue.player.play(resource);
     queue.playing = true;
   } catch (err) {
