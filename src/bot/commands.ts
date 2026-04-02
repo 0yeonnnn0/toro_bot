@@ -21,7 +21,7 @@ import { getStats as getRagStats } from "./rag";
 import { generateImage, type ImageModel } from "./draw";
 import { generateSpeech, VOICES, type VoiceName } from "./tts";
 import { readUserNote, listUserNotes, getVaultStats } from "./vault";
-import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, removeTrack, toggleAutoplay, getAutoplay, type Track } from "./music";
+import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, removeTrack, setAutoplay, getAutoplay, type Track } from "./music";
 
 // ── Command Definitions ──
 export const commands = [
@@ -157,7 +157,23 @@ export const commands = [
 
   new SlashCommandBuilder()
     .setName("autoplay")
-    .setDescription("자동 추천 재생 켜기/끄기"),
+    .setDescription("자동 추천 재생 (장르 지정 가능)")
+    .addStringOption(opt =>
+      opt.setName("genre").setDescription("장르 (예: kpop, lofi, jazz, rock) 또는 off")
+        .addChoices(
+          { name: "끄기", value: "off" },
+          { name: "K-Pop", value: "kpop" },
+          { name: "Pop", value: "pop" },
+          { name: "Hip-Hop", value: "hiphop" },
+          { name: "R&B", value: "rnb" },
+          { name: "Rock", value: "rock" },
+          { name: "Jazz", value: "jazz" },
+          { name: "Lofi", value: "lofi" },
+          { name: "EDM", value: "edm" },
+          { name: "Classical", value: "classical" },
+          { name: "아티스트 기반 (기본)", value: "artist" },
+        )
+    ),
 
   new SlashCommandBuilder()
     .setName("remove")
@@ -744,11 +760,23 @@ async function handleAutoplay(interaction: ChatInputCommandInteraction): Promise
   const guildId = interaction.guildId;
   if (!guildId) return;
 
-  const enabled = toggleAutoplay(guildId);
-  await interaction.reply(enabled
-    ? "자동 추천 재생 **켜짐** — 대기열 끝나면 비슷한 노래 자동 재생"
-    : "자동 추천 재생 **꺼짐**"
-  );
+  const genre = interaction.options.getString("genre");
+
+  if (genre === "off") {
+    setAutoplay(guildId, "off");
+    await interaction.reply("자동 추천 재생 **꺼짐**");
+    return;
+  }
+
+  const genreValue = genre === "artist" ? null : (genre || null);
+  const enabled = setAutoplay(guildId, genreValue);
+
+  if (enabled) {
+    const label = genreValue ? `**${genreValue}** 장르` : "**아티스트 기반**";
+    await interaction.reply(`자동 추천 재생 **켜짐** (${label}) — 대기열 끝나면 3곡씩 자동 추가`);
+  } else {
+    await interaction.reply("먼저 음악을 재생해줘");
+  }
 }
 
 // ── /remove ──

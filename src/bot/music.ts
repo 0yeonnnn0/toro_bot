@@ -30,7 +30,10 @@ interface GuildQueue {
   playing: boolean;
   leaveTimer: ReturnType<typeof setTimeout> | null;
   autoplay: boolean;
+  autoplayGenre: string | null;
   playedUrls: Set<string>;
+  playedTitles: Set<string>;
+  artistHistory: Map<string, number>;
 }
 
 // ── State ──
@@ -92,15 +95,22 @@ export function removeTrack(guildId: string, index: number): Track | null {
   return queue.tracks.splice(index, 1)[0];
 }
 
-export function toggleAutoplay(guildId: string): boolean {
+export function setAutoplay(guildId: string, genre: string | null): boolean {
   const queue = queues.get(guildId);
   if (!queue) return false;
-  queue.autoplay = !queue.autoplay;
-  return queue.autoplay;
+  if (genre === "off") {
+    queue.autoplay = false;
+    queue.autoplayGenre = null;
+    return false;
+  }
+  queue.autoplay = true;
+  queue.autoplayGenre = genre;
+  return true;
 }
 
-export function getAutoplay(guildId: string): boolean {
-  return queues.get(guildId)?.autoplay || false;
+export function getAutoplay(guildId: string): { enabled: boolean; genre: string | null } {
+  const queue = queues.get(guildId);
+  return { enabled: queue?.autoplay || false, genre: queue?.autoplayGenre || null };
 }
 
 export function isPlaying(guildId: string): boolean {
@@ -167,7 +177,10 @@ export async function playTrackDirect(
       playing: false,
       leaveTimer: null,
       autoplay: false,
+      autoplayGenre: null,
       playedUrls: new Set(),
+      playedTitles: new Set(),
+      artistHistory: new Map(),
     };
     queues.set(channel.guild.id, queue);
 
@@ -175,7 +188,12 @@ export async function playTrackDirect(
       const q = queues.get(channel.guild.id);
       if (!q) return;
       const finished = q.tracks.shift();
-      if (finished) q.playedUrls.add(finished.url);
+      if (finished) {
+        q.playedUrls.add(finished.url);
+        q.playedTitles.add(normTitle(finished.title));
+        const artist = parseArtist(finished.title);
+        if (artist) q.artistHistory.set(artist, (q.artistHistory.get(artist) || 0) + 1);
+      }
       if (q.tracks.length > 0) {
         playNext(channel.guild.id);
       } else if (q.autoplay && finished) {
@@ -277,38 +295,104 @@ function disconnect(guildId: string): void {
   }
 }
 
+const AUTOPLAY_QUEUE_COUNT = 3;
+
 async function autoplayNext(guildId: string, lastTrack: Track): Promise<void> {
   const queue = queues.get(guildId);
   if (!queue) return;
 
   try {
-    const results = await play.search(lastTrack.title + " music", { limit: 10, source: { youtube: "video" } });
-    const next = results.find(r =>
-      (r.durationInSec || 0) <= MAX_DURATION_SEC && !queue.playedUrls.has(r.url)
-    );
+    const added: Track[] = [];
 
-    if (!next) {
+    for (let attempt = 0; attempt < 3 && added.length < AUTOPLAY_QUEUE_COUNT; attempt++) {
+      const searchQuery = buildAutoplayQuery(queue, lastTrack, attempt);
+      const results = await play.search(searchQuery, { limit: 15, source: { youtube: "video" } });
+
+      for (const r of results) {
+        if (added.length >= AUTOPLAY_QUEUE_COUNT) break;
+        const sec = r.durationInSec || 0;
+        const title = r.title || "Unknown";
+        if (sec > MAX_DURATION_SEC) continue;
+        if (queue.playedUrls.has(r.url)) continue;
+        if (queue.playedTitles.has(normTitle(title))) continue;
+        if (added.some(a => a.url === r.url || normTitle(a.title) === normTitle(title))) continue;
+
+        added.push({
+          title,
+          url: r.url,
+          duration: formatDuration(sec),
+          thumbnail: r.thumbnails?.[0]?.url || "",
+          requestedBy: "Autoplay",
+        });
+      }
+    }
+
+    if (added.length === 0) {
       queue.playing = false;
       queue.leaveTimer = setTimeout(() => disconnect(guildId), LEAVE_TIMEOUT);
       return;
     }
 
-    const track: Track = {
-      title: next.title || "Unknown",
-      url: next.url,
-      duration: formatDuration(next.durationInSec || 0),
-      thumbnail: next.thumbnails?.[0]?.url || "",
-      requestedBy: "Autoplay",
-    };
+    for (const track of added) {
+      queue.tracks.push(track);
+    }
+    console.log(`[Autoplay] ${added.map(t => t.title).join(", ")}`);
 
-    queue.tracks.push(track);
-    await playNext(guildId);
-    console.log(`[Autoplay] ${track.title}`);
+    if (!queue.playing) {
+      await playNext(guildId);
+    }
   } catch (err) {
     console.error("Autoplay 실패:", (err as Error).message);
     queue.playing = false;
     queue.leaveTimer = setTimeout(() => disconnect(guildId), LEAVE_TIMEOUT);
   }
+}
+
+function buildAutoplayQuery(queue: GuildQueue, lastTrack: Track, attempt: number): string {
+  // 장르가 지정되어 있으면 장르 기반 검색
+  if (queue.autoplayGenre) {
+    const lastArtist = parseArtist(lastTrack.title);
+    if (attempt === 0 && lastArtist) return `${lastArtist} ${queue.autoplayGenre}`;
+    if (attempt === 0) return `${queue.autoplayGenre} music playlist`;
+    if (attempt === 1) return `${queue.autoplayGenre} popular songs`;
+    return `best ${queue.autoplayGenre} music`;
+  }
+
+  // 아티스트 히스토리가 있으면 가중치 랜덤으로 선택
+  if (queue.artistHistory.size > 0 && attempt < 2) {
+    const artists = [...queue.artistHistory.entries()];
+    const totalWeight = artists.reduce((sum, [, count]) => sum + count, 0);
+    let rand = Math.random() * totalWeight;
+
+    for (const [artist, count] of artists) {
+      rand -= count;
+      if (rand <= 0) {
+        return `${artist} music`;
+      }
+    }
+  }
+
+  const lastArtist = parseArtist(lastTrack.title);
+  if (lastArtist) return `${lastArtist} music`;
+  return `${lastTrack.title} music`;
+}
+
+function parseArtist(title: string): string | null {
+  // "Artist - Title", "Artist — Title", "Artist | Title" 패턴
+  const separators = [" - ", " — ", " – ", " | "];
+  for (const sep of separators) {
+    const idx = title.indexOf(sep);
+    if (idx > 0) {
+      const artist = title.slice(0, idx).trim();
+      // 너무 짧거나 긴 건 아티스트가 아닐 수 있음
+      if (artist.length >= 2 && artist.length <= 50) return artist;
+    }
+  }
+  return null;
+}
+
+function normTitle(title: string): string {
+  return title.toLowerCase().replace(/\s*[\(\[\{].*?[\)\]\}]\s*/g, "").replace(/[^a-z0-9가-힣]/g, "").trim();
 }
 
 function formatDuration(seconds: number): string {
