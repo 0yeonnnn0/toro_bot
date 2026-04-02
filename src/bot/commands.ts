@@ -21,7 +21,7 @@ import { getStats as getRagStats } from "./rag";
 import { generateImage, type ImageModel } from "./draw";
 import { generateSpeech, VOICES, type VoiceName } from "./tts";
 import { readUserNote, listUserNotes, getVaultStats } from "./vault";
-import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, removeTrack, type Track } from "./music";
+import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, removeTrack, toggleAutoplay, getAutoplay, type Track } from "./music";
 
 // ── Command Definitions ──
 export const commands = [
@@ -156,6 +156,10 @@ export const commands = [
     .setDescription("현재 재생 중인 곡"),
 
   new SlashCommandBuilder()
+    .setName("autoplay")
+    .setDescription("자동 추천 재생 켜기/끄기"),
+
+  new SlashCommandBuilder()
     .setName("remove")
     .setDescription("대기열에서 곡 제거")
     .addIntegerOption(opt =>
@@ -232,6 +236,9 @@ export async function handleInteraction(interaction: ChatInputCommandInteraction
       break;
     case "remove":
       await handleRemove(interaction);
+      break;
+    case "autoplay":
+      await handleAutoplay(interaction);
       break;
   }
 }
@@ -730,6 +737,18 @@ async function handleNowPlaying(interaction: ChatInputCommandInteraction): Promi
   };
 
   await interaction.reply({ embeds: [embed] });
+}
+
+// ── /autoplay ──
+async function handleAutoplay(interaction: ChatInputCommandInteraction): Promise<void> {
+  const guildId = interaction.guildId;
+  if (!guildId) return;
+
+  const enabled = toggleAutoplay(guildId);
+  await interaction.reply(enabled
+    ? "자동 추천 재생 **켜짐** — 대기열 끝나면 비슷한 노래 자동 재생"
+    : "자동 추천 재생 **꺼짐**"
+  );
 }
 
 // ── /remove ──
