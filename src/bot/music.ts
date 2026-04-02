@@ -29,6 +29,8 @@ interface GuildQueue {
   connection: VoiceConnection;
   playing: boolean;
   leaveTimer: ReturnType<typeof setTimeout> | null;
+  autoplay: boolean;
+  playedUrls: Set<string>;
 }
 
 // ── State ──
@@ -84,34 +86,58 @@ export function getNowPlaying(guildId: string): Track | null {
   return queue.tracks[0];
 }
 
+export function removeTrack(guildId: string, index: number): Track | null {
+  const queue = queues.get(guildId);
+  if (!queue || index < 1 || index >= queue.tracks.length) return null;
+  return queue.tracks.splice(index, 1)[0];
+}
+
+export function toggleAutoplay(guildId: string): boolean {
+  const queue = queues.get(guildId);
+  if (!queue) return false;
+  queue.autoplay = !queue.autoplay;
+  return queue.autoplay;
+}
+
+export function getAutoplay(guildId: string): boolean {
+  return queues.get(guildId)?.autoplay || false;
+}
+
 export function isPlaying(guildId: string): boolean {
   return queues.get(guildId)?.playing || false;
 }
 
 // ── Internal ──
 
+const MAX_DURATION_SEC = 20 * 60; // 20분
+
 export async function searchTracks(query: string, requestedBy: string, limit: number = 5): Promise<Track[]> {
   try {
     if (play.yt_validate(query) === "video") {
       const details = await play.video_basic_info(query);
       const info = details.video_details;
+      const sec = info.durationInSec || 0;
+      if (sec > MAX_DURATION_SEC) return [];
       return [{
         title: info.title || "Unknown",
         url: info.url,
-        duration: formatDuration(info.durationInSec || 0),
+        duration: formatDuration(sec),
         thumbnail: info.thumbnails?.[0]?.url || "",
         requestedBy,
       }];
     }
 
-    const results = await play.search(query, { limit, source: { youtube: "video" } });
-    return results.map(info => ({
-      title: info.title || "Unknown",
-      url: info.url,
-      duration: formatDuration(info.durationInSec || 0),
-      thumbnail: info.thumbnails?.[0]?.url || "",
-      requestedBy,
-    }));
+    const results = await play.search(query + " music", { limit: limit + 5, source: { youtube: "video" } });
+    return results
+      .filter(info => (info.durationInSec || 0) <= MAX_DURATION_SEC)
+      .slice(0, limit)
+      .map(info => ({
+        title: info.title || "Unknown",
+        url: info.url,
+        duration: formatDuration(info.durationInSec || 0),
+        thumbnail: info.thumbnails?.[0]?.url || "",
+        requestedBy,
+      }));
   } catch (err) {
     console.error("유튜브 검색 실패:", (err as Error).message);
     return [];
@@ -140,15 +166,21 @@ export async function playTrackDirect(
       connection,
       playing: false,
       leaveTimer: null,
+      autoplay: false,
+      playedUrls: new Set(),
     };
     queues.set(channel.guild.id, queue);
 
     player.on(AudioPlayerStatus.Idle, () => {
       const q = queues.get(channel.guild.id);
       if (!q) return;
-      q.tracks.shift();
+      const finished = q.tracks.shift();
+      if (finished) q.playedUrls.add(finished.url);
       if (q.tracks.length > 0) {
         playNext(channel.guild.id);
+      } else if (q.autoplay && finished) {
+        // 자동 추천
+        autoplayNext(channel.guild.id, finished).catch(() => {});
       } else {
         q.playing = false;
         q.leaveTimer = setTimeout(() => disconnect(channel.guild.id), LEAVE_TIMEOUT);
@@ -242,6 +274,40 @@ function disconnect(guildId: string): void {
   } else {
     const conn = getVoiceConnection(guildId);
     conn?.destroy();
+  }
+}
+
+async function autoplayNext(guildId: string, lastTrack: Track): Promise<void> {
+  const queue = queues.get(guildId);
+  if (!queue) return;
+
+  try {
+    const results = await play.search(lastTrack.title + " music", { limit: 10, source: { youtube: "video" } });
+    const next = results.find(r =>
+      (r.durationInSec || 0) <= MAX_DURATION_SEC && !queue.playedUrls.has(r.url)
+    );
+
+    if (!next) {
+      queue.playing = false;
+      queue.leaveTimer = setTimeout(() => disconnect(guildId), LEAVE_TIMEOUT);
+      return;
+    }
+
+    const track: Track = {
+      title: next.title || "Unknown",
+      url: next.url,
+      duration: formatDuration(next.durationInSec || 0),
+      thumbnail: next.thumbnails?.[0]?.url || "",
+      requestedBy: "Autoplay",
+    };
+
+    queue.tracks.push(track);
+    await playNext(guildId);
+    console.log(`[Autoplay] ${track.title}`);
+  } catch (err) {
+    console.error("Autoplay 실패:", (err as Error).message);
+    queue.playing = false;
+    queue.leaveTimer = setTimeout(() => disconnect(guildId), LEAVE_TIMEOUT);
   }
 }
 

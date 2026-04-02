@@ -21,7 +21,7 @@ import { getStats as getRagStats } from "./rag";
 import { generateImage, type ImageModel } from "./draw";
 import { generateSpeech, VOICES, type VoiceName } from "./tts";
 import { readUserNote, listUserNotes, getVaultStats } from "./vault";
-import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, type Track } from "./music";
+import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, removeTrack, toggleAutoplay, getAutoplay, type Track } from "./music";
 
 // ── Command Definitions ──
 export const commands = [
@@ -154,6 +154,17 @@ export const commands = [
   new SlashCommandBuilder()
     .setName("nowplaying")
     .setDescription("현재 재생 중인 곡"),
+
+  new SlashCommandBuilder()
+    .setName("autoplay")
+    .setDescription("자동 추천 재생 켜기/끄기"),
+
+  new SlashCommandBuilder()
+    .setName("remove")
+    .setDescription("대기열에서 곡 제거")
+    .addIntegerOption(opt =>
+      opt.setName("번호").setDescription("제거할 곡 번호 (/queue에서 확인)").setRequired(true).setMinValue(1)
+    ),
 ];
 
 // ── Register Commands ──
@@ -222,6 +233,12 @@ export async function handleInteraction(interaction: ChatInputCommandInteraction
       break;
     case "nowplaying":
       await handleNowPlaying(interaction);
+      break;
+    case "remove":
+      await handleRemove(interaction);
+      break;
+    case "autoplay":
+      await handleAutoplay(interaction);
       break;
   }
 }
@@ -385,7 +402,7 @@ async function handleDraw(interaction: ChatInputCommandInteraction): Promise<voi
     if (msg.includes("429") || msg.includes("quota")) {
       await interaction.editReply("오늘은 그림을 너무 많이 그렸다냥... 내일 다시 오라냥! >w<");
     } else {
-      await interaction.editReply("그림 그리다가 뭔가 고장났다냥... @д@ " + msg);
+      await interaction.editReply("그림 그리다 뭔가 고장났다냥... @д@\n" + msg);
     }
   }
 }
@@ -522,7 +539,7 @@ async function handlePlay(interaction: ChatInputCommandInteraction): Promise<voi
     return;
   }
 
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: ['Ephemeral'] });
 
   try {
     const results = await searchTracks(query, interaction.user.displayName, 4);
@@ -617,7 +634,8 @@ async function handlePlay(interaction: ChatInputCommandInteraction): Promise<voi
         const track = results[idx];
         const position = await playTrackDirect(voiceChannel, track);
 
-        await btnInteraction.update({ embeds: [makePlayEmbed(track, position)], components: [] });
+        await btnInteraction.update({ content: "선택 완료", embeds: [], components: [] });
+        await interaction.followUp({ embeds: [makePlayEmbed(track, position)] });
       }
     } catch {
       // 타임아웃 — 버튼 제거
@@ -719,6 +737,33 @@ async function handleNowPlaying(interaction: ChatInputCommandInteraction): Promi
   };
 
   await interaction.reply({ embeds: [embed] });
+}
+
+// ── /autoplay ──
+async function handleAutoplay(interaction: ChatInputCommandInteraction): Promise<void> {
+  const guildId = interaction.guildId;
+  if (!guildId) return;
+
+  const enabled = toggleAutoplay(guildId);
+  await interaction.reply(enabled
+    ? "자동 추천 재생 **켜짐** — 대기열 끝나면 비슷한 노래 자동 재생"
+    : "자동 추천 재생 **꺼짐**"
+  );
+}
+
+// ── /remove ──
+async function handleRemove(interaction: ChatInputCommandInteraction): Promise<void> {
+  const guildId = interaction.guildId;
+  if (!guildId) return;
+
+  const index = interaction.options.getInteger("번호", true);
+  const removed = removeTrack(guildId, index);
+
+  if (removed) {
+    await interaction.reply(`**${removed.title}** 대기열에서 제거`);
+  } else {
+    await interaction.reply({ content: `${index}번 곡을 찾을 수 없어. \`/queue\`로 확인해봐`, ephemeral: true });
+  }
 }
 
 // ── Autocomplete ──
