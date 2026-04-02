@@ -12,7 +12,8 @@ import {
 } from "@discordjs/voice";
 import play from "play-dl";
 import { spawn } from "child_process";
-import type { VoiceBasedChannel } from "discord.js";
+import { ActivityType, type VoiceBasedChannel } from "discord.js";
+import { client } from "./client";
 
 // ── Types ──
 export interface Track {
@@ -158,17 +159,36 @@ export async function searchTracks(query: string, requestedBy: string, limit: nu
       }];
     }
 
-    const results = await play.search(query + " music", { limit: limit + 5, source: { youtube: "video" } });
-    return results
-      .filter(info => (info.durationInSec || 0) <= MAX_DURATION_SEC)
-      .slice(0, limit)
-      .map(info => ({
-        title: info.title || "Unknown",
-        url: info.url,
-        duration: formatDuration(info.durationInSec || 0),
-        thumbnail: info.thumbnails?.[0]?.url || "",
-        requestedBy,
-      }));
+    // yt-dlp로 유튜브 뮤직 검색
+    const searchResults = await new Promise<string>((resolve, reject) => {
+      const proc = spawn("yt-dlp", [
+        `ytmsearch${limit + 5}:${query}`,
+        "--print", "%(title)s\t%(id)s\t%(duration_string)s\t%(thumbnail)s",
+        "--no-warnings", "--quiet",
+      ]);
+      let out = "";
+      proc.stdout.on("data", (d) => out += d.toString());
+      proc.stderr.on("data", () => {});
+      proc.on("error", reject);
+      proc.on("close", (code) => code === 0 ? resolve(out) : reject(new Error("ytmusic search failed")));
+      setTimeout(() => { proc.kill(); reject(new Error("timeout")); }, 15000);
+    });
+
+    const lines = searchResults.trim().split("\n").filter(l => l.includes("\t"));
+    return lines
+      .map(line => {
+        const [title, id, dur, thumb] = line.split("\t");
+        return {
+          title: title || "Unknown",
+          url: `https://www.youtube.com/watch?v=${id}`,
+          duration: formatDuration(parseDurationStr(dur || "0")),
+          durationInSec: parseDurationStr(dur || "0"),
+          thumbnail: thumb || "",
+          requestedBy,
+        };
+      })
+      .filter(t => t.durationInSec <= MAX_DURATION_SEC)
+      .slice(0, limit);
   } catch (err) {
     console.error("유튜브 검색 실패:", (err as Error).message);
     return [];
@@ -313,6 +333,7 @@ async function playNext(guildId: string): Promise<void> {
     const resource = createAudioResource(ffmpeg.stdout, { inputType: StreamType.OggOpus });
     queue.player.play(resource);
     queue.playing = true;
+    setNowPlayingActivity(track.title);
   } catch (err) {
     console.error("스트림 생성 실패:", (err as Error).message);
     queue.tracks.shift();
@@ -335,6 +356,19 @@ function disconnect(guildId: string): void {
     const conn = getVoiceConnection(guildId);
     conn?.destroy();
   }
+  clearActivity();
+}
+
+function setNowPlayingActivity(title: string): void {
+  try {
+    client.user?.setActivity(title, { type: ActivityType.Listening });
+  } catch {}
+}
+
+function clearActivity(): void {
+  try {
+    client.user?.setActivity(undefined as any);
+  } catch {}
 }
 
 const AUTOPLAY_QUEUE_COUNT = 3;
@@ -376,6 +410,7 @@ async function autoplayNext(guildId: string, lastTrack: Track): Promise<void> {
           if (sec > MAX_DURATION_SEC) continue;
           if (queue.playedUrls.has(url)) continue;
           if (queue.playedTitles.has(normTitle(title))) continue;
+          if (queue.tracks.some(t => t.url === url || normTitle(t.title) === normTitle(title))) continue;
           if (added.some(a => normTitle(a.title) === normTitle(title))) continue;
 
           added.push({
@@ -432,6 +467,7 @@ async function autoplayNext(guildId: string, lastTrack: Track): Promise<void> {
           if (sec > MAX_DURATION_SEC) continue;
           if (queue.playedUrls.has(r.url)) continue;
           if (queue.playedTitles.has(normTitle(title))) continue;
+          if (queue.tracks.some(t => t.url === r.url || normTitle(t.title) === normTitle(title))) continue;
           if (added.some(a => a.url === r.url || normTitle(a.title) === normTitle(title))) continue;
 
           added.push({
@@ -495,7 +531,7 @@ function buildAutoplayQuery(queue: GuildQueue, lastTrack: Track, attempt: number
   return `${lastTrack.title} music`;
 }
 
-function parseArtist(title: string): string | null {
+export function parseArtist(title: string): string | null {
   // "Artist - Title", "Artist — Title", "Artist | Title" 패턴
   const separators = [" - ", " — ", " – ", " | "];
   for (const sep of separators) {
