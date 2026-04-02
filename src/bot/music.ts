@@ -123,7 +123,7 @@ export function setVolume(guildId: string, vol: number): number {
 }
 
 export function getVolume(guildId: string): number {
-  return Math.round((queues.get(guildId)?.volume ?? 0.5) * 100);
+  return Math.round((queues.get(guildId)?.volume ?? 0.3) * 100);
 }
 
 export async function triggerAutoplayNow(guildId: string): Promise<void> {
@@ -215,7 +215,7 @@ export async function playTrackDirect(
       playedUrls: new Set(),
       playedTitles: new Set(),
       artistHistory: new Map(),
-      volume: 0.5,
+      volume: 0.3,
     };
     queues.set(channel.guild.id, queue);
 
