@@ -159,10 +159,11 @@ export async function searchTracks(query: string, requestedBy: string, limit: nu
       }];
     }
 
-    // yt-dlp로 유튜브 뮤직 검색
+    // yt-dlp로 유튜브 검색 (음악 우선)
+    const searchQuery = `${query} official audio`;
     const searchResults = await new Promise<string>((resolve, reject) => {
       const proc = spawn("yt-dlp", [
-        `ytmsearch${limit + 5}:${query}`,
+        `ytsearch${limit + 5}:${searchQuery}`,
         "--print", "%(title)s\t%(id)s\t%(duration_string)s\t%(thumbnail)s",
         "--no-warnings", "--quiet",
       ]);
@@ -170,7 +171,7 @@ export async function searchTracks(query: string, requestedBy: string, limit: nu
       proc.stdout.on("data", (d) => out += d.toString());
       proc.stderr.on("data", () => {});
       proc.on("error", reject);
-      proc.on("close", (code) => code === 0 ? resolve(out) : reject(new Error("ytmusic search failed")));
+      proc.on("close", (code) => code === 0 ? resolve(out) : reject(new Error("yt search failed")));
       setTimeout(() => { proc.kill(); reject(new Error("timeout")); }, 15000);
     });
 
