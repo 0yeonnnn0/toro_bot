@@ -532,7 +532,7 @@ async function handlePlay(interaction: ChatInputCommandInteraction): Promise<voi
     return;
   }
 
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: ['Ephemeral'] });
 
   try {
     const results = await searchTracks(query, interaction.user.displayName, 4);
@@ -627,7 +627,8 @@ async function handlePlay(interaction: ChatInputCommandInteraction): Promise<voi
         const track = results[idx];
         const position = await playTrackDirect(voiceChannel, track);
 
-        await btnInteraction.update({ embeds: [makePlayEmbed(track, position)], components: [] });
+        await btnInteraction.update({ content: "선택 완료", embeds: [], components: [] });
+        await interaction.followUp({ embeds: [makePlayEmbed(track, position)] });
       }
     } catch {
       // 타임아웃 — 버튼 제거
