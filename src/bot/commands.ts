@@ -14,6 +14,7 @@ import { getStats as getRagStats } from "./rag";
 import { generateImage, type ImageModel } from "./draw";
 import { generateSpeech, VOICES, type VoiceName } from "./tts";
 import { readUserNote, listUserNotes, getVaultStats } from "./vault";
+import { playTrack, skip, stop as musicStop, pause, getQueue, getNowPlaying } from "./music";
 
 // ── Command Definitions ──
 export const commands = [
@@ -118,6 +119,34 @@ export const commands = [
     .addIntegerOption(opt =>
       opt.setName("threshold").setDescription("간격 모드: 메시지 수 (기본 5)").setMinValue(1).setMaxValue(50)
     ),
+
+  // ── Music ──
+  new SlashCommandBuilder()
+    .setName("play")
+    .setDescription("유튜브 음악 재생")
+    .addStringOption(opt =>
+      opt.setName("query").setDescription("검색어 또는 유튜브 URL").setRequired(true)
+    ),
+
+  new SlashCommandBuilder()
+    .setName("skip")
+    .setDescription("현재 곡 스킵"),
+
+  new SlashCommandBuilder()
+    .setName("stop")
+    .setDescription("음악 정지 + 퇴장"),
+
+  new SlashCommandBuilder()
+    .setName("pause")
+    .setDescription("일시정지 / 재개"),
+
+  new SlashCommandBuilder()
+    .setName("queue")
+    .setDescription("대기열 보기"),
+
+  new SlashCommandBuilder()
+    .setName("nowplaying")
+    .setDescription("현재 재생 중인 곡"),
 ];
 
 // ── Register Commands ──
@@ -168,6 +197,24 @@ export async function handleInteraction(interaction: ChatInputCommandInteraction
       break;
     case "reply":
       await handleReply(interaction);
+      break;
+    case "play":
+      await handlePlay(interaction);
+      break;
+    case "skip":
+      await handleSkip(interaction);
+      break;
+    case "stop":
+      await handleStop(interaction);
+      break;
+    case "pause":
+      await handlePause(interaction);
+      break;
+    case "queue":
+      await handleQueue(interaction);
+      break;
+    case "nowplaying":
+      await handleNowPlaying(interaction);
       break;
   }
 }
@@ -455,6 +502,117 @@ export function isChannelMuted(channelId: string): boolean {
     return false;
   }
   return true;
+}
+
+// ── /play ──
+async function handlePlay(interaction: ChatInputCommandInteraction): Promise<void> {
+  const query = interaction.options.getString("query", true);
+  const member = interaction.guild?.members.cache.get(interaction.user.id);
+  const voiceChannel = member?.voice.channel;
+
+  if (!voiceChannel) {
+    await interaction.reply({ content: "먼저 음성 채널에 들어가", ephemeral: true });
+    return;
+  }
+
+  await interaction.deferReply();
+
+  try {
+    const { track, position } = await playTrack(voiceChannel, query, interaction.user.displayName);
+    const embed = {
+      color: 0x3182f6,
+      title: position === 1 ? "Now Playing" : `#${position} 대기열 추가`,
+      description: `**[${track.title}](${track.url})**`,
+      fields: [
+        { name: "길이", value: track.duration, inline: true },
+        { name: "요청", value: track.requestedBy, inline: true },
+      ],
+      thumbnail: track.thumbnail ? { url: track.thumbnail } : undefined,
+    };
+    await interaction.editReply({ embeds: [embed] });
+  } catch (err) {
+    await interaction.editReply(`노래를 찾을 수 없다냥... @д@ ${(err as Error).message}`);
+  }
+}
+
+// ── /skip ──
+async function handleSkip(interaction: ChatInputCommandInteraction): Promise<void> {
+  const guildId = interaction.guildId;
+  if (!guildId) return;
+
+  const skipped = skip(guildId);
+  if (skipped) {
+    await interaction.reply(`**${skipped.title}** 스킵!`);
+  } else {
+    await interaction.reply({ content: "재생 중인 곡이 없어", ephemeral: true });
+  }
+}
+
+// ── /stop ──
+async function handleStop(interaction: ChatInputCommandInteraction): Promise<void> {
+  const guildId = interaction.guildId;
+  if (!guildId) return;
+
+  musicStop(guildId);
+  await interaction.reply("음악 정지! 나간다냥 >w<");
+}
+
+// ── /pause ──
+async function handlePause(interaction: ChatInputCommandInteraction): Promise<void> {
+  const guildId = interaction.guildId;
+  if (!guildId) return;
+
+  const paused = pause(guildId);
+  await interaction.reply(paused ? "일시정지 ⏸️" : "재개 ▶️");
+}
+
+// ── /queue ──
+async function handleQueue(interaction: ChatInputCommandInteraction): Promise<void> {
+  const guildId = interaction.guildId;
+  if (!guildId) return;
+
+  const tracks = getQueue(guildId);
+  if (tracks.length === 0) {
+    await interaction.reply({ content: "대기열이 비어있어", ephemeral: true });
+    return;
+  }
+
+  const list = tracks.map((t, i) =>
+    `${i === 0 ? "▸ " : `${i}. `}**${t.title}** (${t.duration}) — ${t.requestedBy}`
+  ).join("\n");
+
+  const embed = {
+    color: 0x3182f6,
+    title: `대기열 (${tracks.length}곡)`,
+    description: list.slice(0, 2000),
+  };
+
+  await interaction.reply({ embeds: [embed], ephemeral: true });
+}
+
+// ── /nowplaying ──
+async function handleNowPlaying(interaction: ChatInputCommandInteraction): Promise<void> {
+  const guildId = interaction.guildId;
+  if (!guildId) return;
+
+  const track = getNowPlaying(guildId);
+  if (!track) {
+    await interaction.reply({ content: "재생 중인 곡이 없어", ephemeral: true });
+    return;
+  }
+
+  const embed = {
+    color: 0x3182f6,
+    title: "Now Playing",
+    description: `**[${track.title}](${track.url})**`,
+    fields: [
+      { name: "길이", value: track.duration, inline: true },
+      { name: "요청", value: track.requestedBy, inline: true },
+    ],
+    thumbnail: track.thumbnail ? { url: track.thumbnail } : undefined,
+  };
+
+  await interaction.reply({ embeds: [embed] });
 }
 
 // ── Autocomplete ──
