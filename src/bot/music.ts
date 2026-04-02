@@ -497,7 +497,7 @@ function buildAutoplayQuery(queue: GuildQueue, lastTrack: Track, attempt: number
   return `${lastTrack.title} music`;
 }
 
-function parseArtist(title: string): string | null {
+export function parseArtist(title: string): string | null {
   // "Artist - Title", "Artist — Title", "Artist | Title" 패턴
   const separators = [" - ", " — ", " – ", " | "];
   for (const sep of separators) {

@@ -21,7 +21,7 @@ import { getStats as getRagStats } from "./rag";
 import { generateImage, type ImageModel } from "./draw";
 import { generateSpeech, VOICES, type VoiceName } from "./tts";
 import { readUserNote, listUserNotes, getVaultStats } from "./vault";
-import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, removeTrack, setAutoplay, getAutoplay, triggerAutoplayNow, type Track } from "./music";
+import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, removeTrack, setAutoplay, getAutoplay, triggerAutoplayNow, parseArtist, type Track } from "./music";
 
 // ── Command Definitions ──
 export const commands = [
@@ -700,14 +700,17 @@ async function showSearchPage(
 }
 
 function makePlayEmbed(track: Track, position: number) {
+  const artist = parseArtist(track.title);
+  const fields = [];
+  if (artist) fields.push({ name: "아티스트", value: artist, inline: true });
+  fields.push({ name: "길이", value: track.duration, inline: true });
+  fields.push({ name: "요청", value: track.requestedBy, inline: true });
+
   return {
     color: 0x3182f6,
     title: position === 1 ? "Now Playing" : `#${position} 대기열 추가`,
     description: `**[${track.title}](${track.url})**`,
-    fields: [
-      { name: "길이", value: track.duration, inline: true },
-      { name: "요청", value: track.requestedBy, inline: true },
-    ],
+    fields,
     thumbnail: track.thumbnail ? { url: track.thumbnail } : undefined,
   };
 }
@@ -754,9 +757,11 @@ async function handleQueue(interaction: ChatInputCommandInteraction): Promise<vo
     return;
   }
 
-  const list = tracks.map((t, i) =>
-    `${i === 0 ? "▸ " : `${i}. `}**${t.title}** (${t.duration}) — ${t.requestedBy}`
-  ).join("\n");
+  const list = tracks.map((t, i) => {
+    const artist = parseArtist(t.title);
+    const artistLabel = artist ? ` — ${artist}` : "";
+    return `${i === 0 ? "▸ " : `${i}. `}**${t.title}** (${t.duration})${artistLabel} | ${t.requestedBy}`;
+  }).join("\n");
 
   const embed = {
     color: 0x3182f6,
@@ -778,14 +783,17 @@ async function handleNowPlaying(interaction: ChatInputCommandInteraction): Promi
     return;
   }
 
+  const artist = parseArtist(track.title);
+  const fields = [];
+  if (artist) fields.push({ name: "아티스트", value: artist, inline: true });
+  fields.push({ name: "길이", value: track.duration, inline: true });
+  fields.push({ name: "요청", value: track.requestedBy, inline: true });
+
   const embed = {
     color: 0x3182f6,
     title: "Now Playing",
     description: `**[${track.title}](${track.url})**`,
-    fields: [
-      { name: "길이", value: track.duration, inline: true },
-      { name: "요청", value: track.requestedBy, inline: true },
-    ],
+    fields,
     thumbnail: track.thumbnail ? { url: track.thumbnail } : undefined,
   };
 
