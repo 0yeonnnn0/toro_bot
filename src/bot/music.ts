@@ -35,6 +35,7 @@ interface GuildQueue {
   playedUrls: Set<string>;
   playedTitles: Set<string>;
   artistHistory: Map<string, number>;
+  volume: number; // 0.0 ~ 1.0
 }
 
 // ── State ──
@@ -112,6 +113,17 @@ export function setAutoplay(guildId: string, genre: string | null): boolean {
 export function getAutoplay(guildId: string): { enabled: boolean; genre: string | null } {
   const queue = queues.get(guildId);
   return { enabled: queue?.autoplay || false, genre: queue?.autoplayGenre || null };
+}
+
+export function setVolume(guildId: string, vol: number): number {
+  const queue = queues.get(guildId);
+  if (!queue) return 50;
+  queue.volume = Math.max(0, Math.min(1, vol));
+  return Math.round(queue.volume * 100);
+}
+
+export function getVolume(guildId: string): number {
+  return Math.round((queues.get(guildId)?.volume ?? 0.3) * 100);
 }
 
 export async function triggerAutoplayNow(guildId: string): Promise<void> {
@@ -203,6 +215,7 @@ export async function playTrackDirect(
       playedUrls: new Set(),
       playedTitles: new Set(),
       artistHistory: new Map(),
+      volume: 0.3,
     };
     queues.set(channel.guild.id, queue);
 
@@ -292,6 +305,7 @@ async function playNext(guildId: string): Promise<void> {
       "-i", "pipe:0",
       "-analyzeduration", "0",
       "-loglevel", "0",
+      "-af", `volume=${queue.volume}`,
       "-f", "opus",
       "-ar", "48000",
       "-ac", "2",
