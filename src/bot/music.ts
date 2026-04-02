@@ -211,6 +211,10 @@ export async function playTrackDirect(
       }
       if (q.tracks.length > 0) {
         playNext(channel.guild.id);
+        // 대기열 1곡 이하면 미리 채워놓기
+        if (q.autoplay && q.tracks.length <= 1 && finished) {
+          autoplayNext(channel.guild.id, finished).catch(() => {});
+        }
       } else if (q.autoplay && finished) {
         q.playing = false;
         autoplayNext(channel.guild.id, finished).catch(() => {
