@@ -13,6 +13,7 @@ import {
 import play from "play-dl";
 import { spawn } from "child_process";
 import type { VoiceBasedChannel } from "discord.js";
+import { getRecommendations, isConfigured as spotifyConfigured } from "./spotify";
 
 // ── Types ──
 export interface Track {
@@ -210,6 +211,10 @@ export async function playTrackDirect(
       }
       if (q.tracks.length > 0) {
         playNext(channel.guild.id);
+        // 대기열 1곡 이하면 미리 채워놓기
+        if (q.autoplay && q.tracks.length <= 1 && finished) {
+          autoplayNext(channel.guild.id, finished).catch(() => {});
+        }
       } else if (q.autoplay && finished) {
         q.playing = false;
         autoplayNext(channel.guild.id, finished).catch(() => {
@@ -244,8 +249,14 @@ export async function playTrackDirect(
     queue.leaveTimer = null;
   }
 
-  queue.tracks.push(track);
-  const position = queue.tracks.length;
+  // 유저 곡은 autoplay 곡들 앞에 삽입
+  const firstAutoplayIdx = queue.tracks.findIndex((t, i) => i > 0 && t.requestedBy.startsWith("Autoplay"));
+  if (firstAutoplayIdx > 0) {
+    queue.tracks.splice(firstAutoplayIdx, 0, track);
+  } else {
+    queue.tracks.push(track);
+  }
+  const position = queue.tracks.indexOf(track) + 1;
 
   if (!queue.playing) {
     await playNext(channel.guild.id);
@@ -281,6 +292,15 @@ async function playNext(guildId: string): Promise<void> {
     ]);
 
     ytdlp.stdout.pipe(ffmpeg.stdin);
+
+    // EPIPE 에러 방지 — 한쪽이 먼저 닫혀도 크래시 안 나도록
+    ytdlp.stdin?.on("error", () => {});
+    ytdlp.stdout.on("error", () => {});
+    ffmpeg.stdin.on("error", () => {});
+    ffmpeg.stdout.on("error", () => {});
+    ytdlp.on("error", () => {});
+    ffmpeg.on("error", () => {});
+
     ytdlp.stderr.on("data", (d) => console.error("yt-dlp:", d.toString().trim()));
     ffmpeg.stderr.on("data", (d) => console.error("ffmpeg:", d.toString().trim()));
 
@@ -320,26 +340,60 @@ async function autoplayNext(guildId: string, lastTrack: Track): Promise<void> {
   try {
     const added: Track[] = [];
 
-    for (let attempt = 0; attempt < 3 && added.length < AUTOPLAY_QUEUE_COUNT; attempt++) {
-      const searchQuery = buildAutoplayQuery(queue, lastTrack, attempt);
-      const results = await play.search(searchQuery, { limit: 15, source: { youtube: "video" } });
+    // 1차: Spotify 추천 (설정돼 있으면)
+    if (spotifyConfigured() && added.length < AUTOPLAY_QUEUE_COUNT) {
+      const artist = parseArtist(lastTrack.title);
+      const recs = await getRecommendations(lastTrack.title, artist, 10);
 
-      for (const r of results) {
+      for (const rec of recs) {
         if (added.length >= AUTOPLAY_QUEUE_COUNT) break;
-        const sec = r.durationInSec || 0;
-        const title = r.title || "Unknown";
-        if (sec > MAX_DURATION_SEC) continue;
-        if (queue.playedUrls.has(r.url)) continue;
-        if (queue.playedTitles.has(normTitle(title))) continue;
-        if (added.some(a => a.url === r.url || normTitle(a.title) === normTitle(title))) continue;
-
-        added.push({
-          title,
-          url: r.url,
-          duration: formatDuration(sec),
-          thumbnail: r.thumbnails?.[0]?.url || "",
-          requestedBy: "Autoplay",
+        // Spotify 추천 → 유튜브에서 검색
+        const ytResults = await play.search(`${rec.query} music`, { limit: 3, source: { youtube: "video" } });
+        const found = ytResults.find(r => {
+          const sec = r.durationInSec || 0;
+          const title = r.title || "";
+          return sec <= MAX_DURATION_SEC
+            && !queue.playedUrls.has(r.url)
+            && !queue.playedTitles.has(normTitle(title))
+            && !added.some(a => normTitle(a.title) === normTitle(title));
         });
+
+        if (found) {
+          added.push({
+            title: found.title || "Unknown",
+            url: found.url,
+            duration: formatDuration(found.durationInSec || 0),
+            thumbnail: found.thumbnails?.[0]?.url || "",
+            requestedBy: "Autoplay (Spotify)",
+          });
+        }
+      }
+      if (added.length > 0) console.log(`[Autoplay/Spotify] ${added.map(t => t.title).join(", ")}`);
+    }
+
+    // 2차: 유튜브 검색 fallback (부족한 만큼 채움)
+    if (added.length < AUTOPLAY_QUEUE_COUNT) {
+      for (let attempt = 0; attempt < 3 && added.length < AUTOPLAY_QUEUE_COUNT; attempt++) {
+        const searchQuery = buildAutoplayQuery(queue, lastTrack, attempt);
+        const results = await play.search(searchQuery, { limit: 15, source: { youtube: "video" } });
+
+        for (const r of results) {
+          if (added.length >= AUTOPLAY_QUEUE_COUNT) break;
+          const sec = r.durationInSec || 0;
+          const title = r.title || "Unknown";
+          if (sec > MAX_DURATION_SEC) continue;
+          if (queue.playedUrls.has(r.url)) continue;
+          if (queue.playedTitles.has(normTitle(title))) continue;
+          if (added.some(a => a.url === r.url || normTitle(a.title) === normTitle(title))) continue;
+
+          added.push({
+            title,
+            url: r.url,
+            duration: formatDuration(sec),
+            thumbnail: r.thumbnails?.[0]?.url || "",
+            requestedBy: "Autoplay",
+          });
+        }
       }
     }
 
@@ -352,7 +406,7 @@ async function autoplayNext(guildId: string, lastTrack: Track): Promise<void> {
     for (const track of added) {
       queue.tracks.push(track);
     }
-    console.log(`[Autoplay] ${added.map(t => t.title).join(", ")}`);
+    console.log(`[Autoplay] 총 ${added.length}곡 추가`);
 
     if (!queue.playing) {
       await playNext(guildId);
@@ -408,7 +462,18 @@ function parseArtist(title: string): string | null {
 }
 
 function normTitle(title: string): string {
-  return title.toLowerCase().replace(/\s*[\(\[\{].*?[\)\]\}]\s*/g, "").replace(/[^a-z0-9가-힣]/g, "").trim();
+  // "Artist - Title" → Title 부분만 추출
+  let songPart = title;
+  const separators = [" - ", " — ", " – ", " | "];
+  for (const sep of separators) {
+    const idx = title.indexOf(sep);
+    if (idx > 0) {
+      songPart = title.slice(idx + sep.length);
+      break;
+    }
+  }
+  // 괄호 제거, 소문자, 특수문자 제거
+  return songPart.toLowerCase().replace(/\s*[\(\[\{].*?[\)\]\}]\s*/g, "").replace(/[^a-z0-9가-힣]/g, "").trim();
 }
 
 function formatDuration(seconds: number): string {
