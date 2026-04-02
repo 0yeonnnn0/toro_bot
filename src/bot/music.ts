@@ -12,7 +12,8 @@ import {
 } from "@discordjs/voice";
 import play from "play-dl";
 import { spawn } from "child_process";
-import type { VoiceBasedChannel } from "discord.js";
+import { ActivityType, type VoiceBasedChannel } from "discord.js";
+import { client } from "./client";
 
 // ── Types ──
 export interface Track {
@@ -332,6 +333,7 @@ async function playNext(guildId: string): Promise<void> {
     const resource = createAudioResource(ffmpeg.stdout, { inputType: StreamType.OggOpus });
     queue.player.play(resource);
     queue.playing = true;
+    setNowPlayingActivity(track.title);
   } catch (err) {
     console.error("스트림 생성 실패:", (err as Error).message);
     queue.tracks.shift();
@@ -354,6 +356,19 @@ function disconnect(guildId: string): void {
     const conn = getVoiceConnection(guildId);
     conn?.destroy();
   }
+  clearActivity();
+}
+
+function setNowPlayingActivity(title: string): void {
+  try {
+    client.user?.setActivity(title, { type: ActivityType.Listening });
+  } catch {}
+}
+
+function clearActivity(): void {
+  try {
+    client.user?.setActivity(undefined as any);
+  } catch {}
 }
 
 const AUTOPLAY_QUEUE_COUNT = 3;
