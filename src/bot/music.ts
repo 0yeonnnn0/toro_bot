@@ -282,6 +282,15 @@ async function playNext(guildId: string): Promise<void> {
     ]);
 
     ytdlp.stdout.pipe(ffmpeg.stdin);
+
+    // EPIPE 에러 방지 — 한쪽이 먼저 닫혀도 크래시 안 나도록
+    ytdlp.stdin?.on("error", () => {});
+    ytdlp.stdout.on("error", () => {});
+    ffmpeg.stdin.on("error", () => {});
+    ffmpeg.stdout.on("error", () => {});
+    ytdlp.on("error", () => {});
+    ffmpeg.on("error", () => {});
+
     ytdlp.stderr.on("data", (d) => console.error("yt-dlp:", d.toString().trim()));
     ffmpeg.stderr.on("data", (d) => console.error("ffmpeg:", d.toString().trim()));
 
@@ -443,7 +452,18 @@ function parseArtist(title: string): string | null {
 }
 
 function normTitle(title: string): string {
-  return title.toLowerCase().replace(/\s*[\(\[\{].*?[\)\]\}]\s*/g, "").replace(/[^a-z0-9가-힣]/g, "").trim();
+  // "Artist - Title" → Title 부분만 추출
+  let songPart = title;
+  const separators = [" - ", " — ", " – ", " | "];
+  for (const sep of separators) {
+    const idx = title.indexOf(sep);
+    if (idx > 0) {
+      songPart = title.slice(idx + sep.length);
+      break;
+    }
+  }
+  // 괄호 제거, 소문자, 특수문자 제거
+  return songPart.toLowerCase().replace(/\s*[\(\[\{].*?[\)\]\}]\s*/g, "").replace(/[^a-z0-9가-힣]/g, "").trim();
 }
 
 function formatDuration(seconds: number): string {
