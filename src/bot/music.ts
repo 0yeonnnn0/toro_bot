@@ -13,6 +13,7 @@ import {
 import play from "play-dl";
 import { spawn } from "child_process";
 import type { VoiceBasedChannel } from "discord.js";
+import { getRecommendations, isConfigured as spotifyConfigured } from "./spotify";
 
 // ── Types ──
 export interface Track {
@@ -320,26 +321,60 @@ async function autoplayNext(guildId: string, lastTrack: Track): Promise<void> {
   try {
     const added: Track[] = [];
 
-    for (let attempt = 0; attempt < 3 && added.length < AUTOPLAY_QUEUE_COUNT; attempt++) {
-      const searchQuery = buildAutoplayQuery(queue, lastTrack, attempt);
-      const results = await play.search(searchQuery, { limit: 15, source: { youtube: "video" } });
+    // 1차: Spotify 추천 (설정돼 있으면)
+    if (spotifyConfigured() && added.length < AUTOPLAY_QUEUE_COUNT) {
+      const artist = parseArtist(lastTrack.title);
+      const recs = await getRecommendations(lastTrack.title, artist, 10);
 
-      for (const r of results) {
+      for (const rec of recs) {
         if (added.length >= AUTOPLAY_QUEUE_COUNT) break;
-        const sec = r.durationInSec || 0;
-        const title = r.title || "Unknown";
-        if (sec > MAX_DURATION_SEC) continue;
-        if (queue.playedUrls.has(r.url)) continue;
-        if (queue.playedTitles.has(normTitle(title))) continue;
-        if (added.some(a => a.url === r.url || normTitle(a.title) === normTitle(title))) continue;
-
-        added.push({
-          title,
-          url: r.url,
-          duration: formatDuration(sec),
-          thumbnail: r.thumbnails?.[0]?.url || "",
-          requestedBy: "Autoplay",
+        // Spotify 추천 → 유튜브에서 검색
+        const ytResults = await play.search(`${rec.query} music`, { limit: 3, source: { youtube: "video" } });
+        const found = ytResults.find(r => {
+          const sec = r.durationInSec || 0;
+          const title = r.title || "";
+          return sec <= MAX_DURATION_SEC
+            && !queue.playedUrls.has(r.url)
+            && !queue.playedTitles.has(normTitle(title))
+            && !added.some(a => normTitle(a.title) === normTitle(title));
         });
+
+        if (found) {
+          added.push({
+            title: found.title || "Unknown",
+            url: found.url,
+            duration: formatDuration(found.durationInSec || 0),
+            thumbnail: found.thumbnails?.[0]?.url || "",
+            requestedBy: "Autoplay (Spotify)",
+          });
+        }
+      }
+      if (added.length > 0) console.log(`[Autoplay/Spotify] ${added.map(t => t.title).join(", ")}`);
+    }
+
+    // 2차: 유튜브 검색 fallback (부족한 만큼 채움)
+    if (added.length < AUTOPLAY_QUEUE_COUNT) {
+      for (let attempt = 0; attempt < 3 && added.length < AUTOPLAY_QUEUE_COUNT; attempt++) {
+        const searchQuery = buildAutoplayQuery(queue, lastTrack, attempt);
+        const results = await play.search(searchQuery, { limit: 15, source: { youtube: "video" } });
+
+        for (const r of results) {
+          if (added.length >= AUTOPLAY_QUEUE_COUNT) break;
+          const sec = r.durationInSec || 0;
+          const title = r.title || "Unknown";
+          if (sec > MAX_DURATION_SEC) continue;
+          if (queue.playedUrls.has(r.url)) continue;
+          if (queue.playedTitles.has(normTitle(title))) continue;
+          if (added.some(a => a.url === r.url || normTitle(a.title) === normTitle(title))) continue;
+
+          added.push({
+            title,
+            url: r.url,
+            duration: formatDuration(sec),
+            thumbnail: r.thumbnails?.[0]?.url || "",
+            requestedBy: "Autoplay",
+          });
+        }
       }
     }
 
@@ -352,7 +387,7 @@ async function autoplayNext(guildId: string, lastTrack: Track): Promise<void> {
     for (const track of added) {
       queue.tracks.push(track);
     }
-    console.log(`[Autoplay] ${added.map(t => t.title).join(", ")}`);
+    console.log(`[Autoplay] 총 ${added.length}곡 추가`);
 
     if (!queue.playing) {
       await playNext(guildId);
