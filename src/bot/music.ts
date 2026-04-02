@@ -351,12 +351,40 @@ async function autoplayNext(guildId: string, lastTrack: Track): Promise<void> {
     if (spotifyConfigured() && added.length < AUTOPLAY_QUEUE_COUNT) {
       const artist = parseArtist(lastTrack.title);
       const recs = await getRecommendations(lastTrack.title, artist, 10);
+      console.log(`[Autoplay/Spotify] 추천 ${recs.length}곡: ${recs.map(r => r.query).join(", ")}`);
 
       for (const rec of recs) {
         if (added.length >= AUTOPLAY_QUEUE_COUNT) break;
-        // Spotify 추천 → 유튜브에서 검색
-        const ytResults = await play.search(`${rec.query} music`, { limit: 3, source: { youtube: "video" } });
-        const found = ytResults.find(r => {
+        // Spotify 추천 → 유튜브에서 검색 (play-dl 실패 시 yt-dlp fallback)
+        let ytResults: any[] = [];
+        try {
+          ytResults = await play.search(`${rec.query}`, { limit: 3, source: { youtube: "video" } });
+        } catch {
+          // play-dl 실패 → yt-dlp로 검색
+          try {
+            const ytdlpSearch = await new Promise<string>((resolve, reject) => {
+              const proc = spawn("yt-dlp", [
+                `ytsearch3:${rec.query}`,
+                "--get-title", "--get-id", "--get-duration",
+                "--no-warnings", "--quiet",
+              ]);
+              let out = "";
+              proc.stdout.on("data", (d) => out += d.toString());
+              proc.on("close", (code) => code === 0 ? resolve(out) : reject(new Error("yt-dlp search failed")));
+              proc.on("error", reject);
+            });
+            const lines = ytdlpSearch.trim().split("\n");
+            for (let i = 0; i + 2 < lines.length; i += 3) {
+              ytResults.push({
+                title: lines[i],
+                url: `https://www.youtube.com/watch?v=${lines[i + 1]}`,
+                durationInSec: parseDurationStr(lines[i + 2]),
+              });
+            }
+          } catch {}
+        }
+
+        const found = ytResults.find((r: any) => {
           const sec = r.durationInSec || 0;
           const title = r.title || "";
           return sec <= MAX_DURATION_SEC
@@ -375,7 +403,7 @@ async function autoplayNext(guildId: string, lastTrack: Track): Promise<void> {
           });
         }
       }
-      if (added.length > 0) console.log(`[Autoplay/Spotify] ${added.map(t => t.title).join(", ")}`);
+      if (added.length > 0) console.log(`[Autoplay/Spotify] 매칭 ${added.length}곡: ${added.map(t => t.title).join(", ")}`);
     }
 
     // 2차: 유튜브 검색 fallback (부족한 만큼 채움)
@@ -481,6 +509,14 @@ function normTitle(title: string): string {
   }
   // 괄호 제거, 소문자, 특수문자 제거
   return songPart.toLowerCase().replace(/\s*[\(\[\{].*?[\)\]\}]\s*/g, "").replace(/[^a-z0-9가-힣]/g, "").trim();
+}
+
+function parseDurationStr(str: string): number {
+  // "3:27" or "1:03:27" → seconds
+  const parts = str.split(":").map(Number);
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return 0;
 }
 
 function formatDuration(seconds: number): string {
