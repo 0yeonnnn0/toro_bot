@@ -21,7 +21,7 @@ import { getStats as getRagStats } from "./rag";
 import { generateImage, type ImageModel } from "./draw";
 import { generateSpeech, VOICES, type VoiceName } from "./tts";
 import { readUserNote, listUserNotes, getVaultStats } from "./vault";
-import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, removeTrack, setAutoplay, getAutoplay, triggerAutoplayNow, parseArtist, type Track } from "./music";
+import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, removeTrack, setAutoplay, getAutoplay, triggerAutoplayNow, parseArtist, setVolume, getVolume, type Track } from "./music";
 
 // ── Command Definitions ──
 export const commands = [
@@ -156,6 +156,13 @@ export const commands = [
     .setDescription("현재 재생 중인 곡"),
 
   new SlashCommandBuilder()
+    .setName("volume")
+    .setDescription("볼륨 조절 (0~100)")
+    .addIntegerOption(opt =>
+      opt.setName("level").setDescription("볼륨 (0~100, 기본 50)").setMinValue(0).setMaxValue(100)
+    ),
+
+  new SlashCommandBuilder()
     .setName("autoplay")
     .setDescription("자동 추천 재생 (장르 지정 가능)")
     .addStringOption(opt =>
@@ -252,6 +259,9 @@ export async function handleInteraction(interaction: ChatInputCommandInteraction
       break;
     case "remove":
       await handleRemove(interaction);
+      break;
+    case "volume":
+      await handleVolume(interaction);
       break;
     case "autoplay":
       await handleAutoplay(interaction);
@@ -797,6 +807,22 @@ async function handleNowPlaying(interaction: ChatInputCommandInteraction): Promi
   };
 
   await interaction.reply({ embeds: [embed] });
+}
+
+// ── /volume ──
+async function handleVolume(interaction: ChatInputCommandInteraction): Promise<void> {
+  const guildId = interaction.guildId;
+  if (!guildId) return;
+
+  const level = interaction.options.getInteger("level");
+
+  if (level === null) {
+    await interaction.reply(`현재 볼륨: **${getVolume(guildId)}%**`);
+    return;
+  }
+
+  const result = setVolume(guildId, level / 100);
+  await interaction.reply(`볼륨: **${result}%** — 다음 곡부터 적용`);
 }
 
 // ── /autoplay ──
