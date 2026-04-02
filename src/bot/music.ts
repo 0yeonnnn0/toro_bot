@@ -13,7 +13,6 @@ import {
 import play from "play-dl";
 import { spawn } from "child_process";
 import type { VoiceBasedChannel } from "discord.js";
-import { getRecommendations, isConfigured as spotifyConfigured } from "./spotify";
 
 // ── Types ──
 export interface Track {
@@ -127,7 +126,7 @@ export function isPlaying(guildId: string): boolean {
 
 // ── Internal ──
 
-const MAX_DURATION_SEC = 20 * 60; // 20분
+const MAX_DURATION_SEC = 15 * 60; // 15분
 
 function cleanYoutubeUrl(url: string): string {
   try {
@@ -347,70 +346,84 @@ async function autoplayNext(guildId: string, lastTrack: Track): Promise<void> {
   try {
     const added: Track[] = [];
 
-    // 1차: Spotify 추천 (설정돼 있으면)
-    if (spotifyConfigured() && added.length < AUTOPLAY_QUEUE_COUNT) {
-      const artist = parseArtist(lastTrack.title);
-      const recs = await getRecommendations(lastTrack.title, artist, 10);
-      console.log(`[Autoplay/Spotify] 추천 ${recs.length}곡: ${recs.map(r => r.query).join(", ")}`);
-
-      for (const rec of recs) {
-        if (added.length >= AUTOPLAY_QUEUE_COUNT) break;
-        // Spotify 추천 → 유튜브에서 검색 (play-dl 실패 시 yt-dlp fallback)
-        let ytResults: any[] = [];
-        try {
-          ytResults = await play.search(`${rec.query}`, { limit: 3, source: { youtube: "video" } });
-        } catch {
-          // play-dl 실패 → yt-dlp로 검색
-          try {
-            const ytdlpSearch = await new Promise<string>((resolve, reject) => {
-              const proc = spawn("yt-dlp", [
-                `ytsearch3:${rec.query}`,
-                "--get-title", "--get-id", "--get-duration",
-                "--no-warnings", "--quiet",
-              ]);
-              let out = "";
-              proc.stdout.on("data", (d) => out += d.toString());
-              proc.on("close", (code) => code === 0 ? resolve(out) : reject(new Error("yt-dlp search failed")));
-              proc.on("error", reject);
-            });
-            const lines = ytdlpSearch.trim().split("\n");
-            for (let i = 0; i + 2 < lines.length; i += 3) {
-              ytResults.push({
-                title: lines[i],
-                url: `https://www.youtube.com/watch?v=${lines[i + 1]}`,
-                durationInSec: parseDurationStr(lines[i + 2]),
-              });
-            }
-          } catch {}
-        }
-
-        const found = ytResults.find((r: any) => {
-          const sec = r.durationInSec || 0;
-          const title = r.title || "";
-          return sec <= MAX_DURATION_SEC
-            && !queue.playedUrls.has(r.url)
-            && !queue.playedTitles.has(normTitle(title))
-            && !added.some(a => normTitle(a.title) === normTitle(title));
+    // 1차: YouTube Radio Mix (RD 플레이리스트) — 유튜브 자체 추천
+    try {
+      const videoId = extractVideoId(lastTrack.url);
+      if (videoId) {
+        const mixUrl = `https://www.youtube.com/watch?v=${videoId}&list=RD${videoId}`;
+        const mixData = await new Promise<string>((resolve, reject) => {
+          const proc = spawn("yt-dlp", [
+            "--flat-playlist", "--print", "%(title)s\t%(id)s\t%(duration_string)s",
+            "--playlist-start", "2", "--playlist-end", "15",
+            "--no-warnings", "--quiet",
+            mixUrl,
+          ]);
+          let out = "";
+          proc.stdout.on("data", (d) => out += d.toString());
+          proc.stderr.on("data", () => {});
+          proc.on("error", reject);
+          proc.on("close", (code) => code === 0 ? resolve(out) : reject(new Error("yt-dlp mix failed")));
+          setTimeout(() => { proc.kill(); reject(new Error("timeout")); }, 15000);
         });
 
-        if (found) {
+        const lines = mixData.trim().split("\n").filter(l => l.includes("\t"));
+        for (const line of lines) {
+          if (added.length >= AUTOPLAY_QUEUE_COUNT) break;
+          const [title, id, dur] = line.split("\t");
+          if (!title || !id) continue;
+          const url = `https://www.youtube.com/watch?v=${id}`;
+          const sec = parseDurationStr(dur || "0");
+          if (sec > MAX_DURATION_SEC) continue;
+          if (queue.playedUrls.has(url)) continue;
+          if (queue.playedTitles.has(normTitle(title))) continue;
+          if (added.some(a => normTitle(a.title) === normTitle(title))) continue;
+
           added.push({
-            title: found.title || "Unknown",
-            url: found.url,
-            duration: formatDuration(found.durationInSec || 0),
-            thumbnail: found.thumbnails?.[0]?.url || "",
-            requestedBy: "Autoplay (Spotify)",
+            title,
+            url,
+            duration: formatDuration(sec),
+            thumbnail: "",
+            requestedBy: "Autoplay",
           });
         }
+        if (added.length > 0) console.log(`[Autoplay/YT Mix] ${added.map(t => t.title).join(", ")}`);
       }
-      if (added.length > 0) console.log(`[Autoplay/Spotify] 매칭 ${added.length}곡: ${added.map(t => t.title).join(", ")}`);
+    } catch (err) {
+      console.error("[Autoplay/YT Mix] 실패:", (err as Error).message);
     }
 
     // 2차: 유튜브 검색 fallback (부족한 만큼 채움)
     if (added.length < AUTOPLAY_QUEUE_COUNT) {
       for (let attempt = 0; attempt < 3 && added.length < AUTOPLAY_QUEUE_COUNT; attempt++) {
         const searchQuery = buildAutoplayQuery(queue, lastTrack, attempt);
-        const results = await play.search(searchQuery, { limit: 15, source: { youtube: "video" } });
+        let results: any[] = [];
+        try {
+          results = await play.search(searchQuery, { limit: 15, source: { youtube: "video" } });
+        } catch {
+          // play-dl 실패 → yt-dlp 검색
+          try {
+            const ytdlpSearch = await new Promise<string>((resolve, reject) => {
+              const proc = spawn("yt-dlp", [
+                `ytsearch10:${searchQuery}`,
+                "--get-title", "--get-id", "--get-duration",
+                "--no-warnings", "--quiet",
+              ]);
+              let out = "";
+              proc.stdout.on("data", (d) => out += d.toString());
+              proc.on("close", (code) => code === 0 ? resolve(out) : reject(new Error("search failed")));
+              proc.on("error", reject);
+              setTimeout(() => { proc.kill(); reject(new Error("timeout")); }, 10000);
+            });
+            const searchLines = ytdlpSearch.trim().split("\n");
+            for (let i = 0; i + 2 < searchLines.length; i += 3) {
+              results.push({
+                title: searchLines[i],
+                url: `https://www.youtube.com/watch?v=${searchLines[i + 1]}`,
+                durationInSec: parseDurationStr(searchLines[i + 2]),
+              });
+            }
+          } catch {}
+        }
 
         for (const r of results) {
           if (added.length >= AUTOPLAY_QUEUE_COUNT) break;
@@ -509,6 +522,15 @@ function normTitle(title: string): string {
   }
   // 괄호 제거, 소문자, 특수문자 제거
   return songPart.toLowerCase().replace(/\s*[\(\[\{].*?[\)\]\}]\s*/g, "").replace(/[^a-z0-9가-힣]/g, "").trim();
+}
+
+function extractVideoId(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes("youtube.com")) return u.searchParams.get("v");
+    if (u.hostname === "youtu.be") return u.pathname.slice(1);
+  } catch {}
+  return null;
 }
 
 function parseDurationStr(str: string): number {
