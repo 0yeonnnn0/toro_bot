@@ -8,6 +8,7 @@ import { getPresets, setActivePreset, getActivePresetId } from "./prompt";
 import { registerCommands, handleInteraction, handleAutocomplete, isChannelMuted } from "./commands";
 import { fetchUrlContext } from "./scrape";
 import { getUserContext, extractAndSave } from "./vault";
+import { stop as musicStop } from "./music";
 import type { ImageData } from "./history";
 
 // @이름 → <@유저ID> 변환
@@ -86,6 +87,18 @@ client.on("interactionCreate", async (interaction) => {
 });
 
 client.on("guildCreate", (guild) => addEvent("guild_join", `${guild.name} (${guild.memberCount}명)`));
+
+// ── 음성 채널: 유저 전부 나가면 봇도 퇴장 ──
+client.on("voiceStateUpdate", (oldState, newState) => {
+  // 유저가 채널에서 나갔을 때만 체크
+  if (!oldState.channel || oldState.channelId === newState.channelId) return;
+  const channel = oldState.channel;
+  // 봇 제외하고 남은 멤버가 0명이면 퇴장
+  const members = channel.members.filter(m => !m.user.bot);
+  if (members.size === 0 && channel.guild) {
+    musicStop(channel.guild.id);
+  }
+});
 
 // ── 환영 메시지 ──
 client.on("guildMemberAdd", async (member) => {

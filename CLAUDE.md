@@ -157,6 +157,25 @@ Discord message → client.ts
 - Config changes from dashboard are written to state immediately
 - Presets saved separately in `data/presets.json`
 
+## Coding guidelines
+
+### Think before coding
+- 불확실하면 가정을 명시하고 물어볼 것. 여러 해석이 가능하면 조용히 하나 고르지 말고 제시.
+- 더 간단한 방법이 있으면 말할 것. 필요하면 pushback.
+
+### Simplicity first
+- 요청한 것만 구현. 추측성 기능, 단일 사용 추상화, 불필요한 에러 핸들링 금지.
+- 200줄이 50줄로 가능하면 다시 쓸 것.
+
+### Surgical changes
+- 요청과 직접 관련된 라인만 변경. 주변 코드 "개선", 리팩토링, 포매팅 금지.
+- 내 변경으로 생긴 unused import/변수만 제거. 기존 dead code는 언급만.
+- 기존 코드 스타일 따를 것.
+
+### Goal-driven execution
+- 작업을 검증 가능한 목표로 변환: "버그 수정" → "재현 테스트 작성 후 통과시키기"
+- 멀티스텝 작업은 간단한 계획 작성: `[단계] → verify: [확인 방법]`
+
 ## Conventions
 
 - Korean comments/logs for internal messages; English for code identifiers
