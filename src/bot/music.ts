@@ -31,6 +31,7 @@ interface GuildQueue {
   leaveTimer: ReturnType<typeof setTimeout> | null;
   autoplay: boolean;
   playedUrls: Set<string>;
+  artistHistory: Map<string, number>; // artist → play count
 }
 
 // ── State ──
@@ -168,6 +169,7 @@ export async function playTrackDirect(
       leaveTimer: null,
       autoplay: false,
       playedUrls: new Set(),
+      artistHistory: new Map(),
     };
     queues.set(channel.guild.id, queue);
 
@@ -175,7 +177,11 @@ export async function playTrackDirect(
       const q = queues.get(channel.guild.id);
       if (!q) return;
       const finished = q.tracks.shift();
-      if (finished) q.playedUrls.add(finished.url);
+      if (finished) {
+        q.playedUrls.add(finished.url);
+        const artist = parseArtist(finished.title);
+        if (artist) q.artistHistory.set(artist, (q.artistHistory.get(artist) || 0) + 1);
+      }
       if (q.tracks.length > 0) {
         playNext(channel.guild.id);
       } else if (q.autoplay && finished) {
@@ -282,14 +288,36 @@ async function autoplayNext(guildId: string, lastTrack: Track): Promise<void> {
   if (!queue) return;
 
   try {
-    const results = await play.search(lastTrack.title + " music", { limit: 10, source: { youtube: "video" } });
+    // 아티스트 기반 추천: 가중치 랜덤으로 아티스트 선택
+    const searchQuery = buildAutoplayQuery(queue, lastTrack);
+    const results = await play.search(searchQuery, { limit: 10, source: { youtube: "video" } });
     const next = results.find(r =>
       (r.durationInSec || 0) <= MAX_DURATION_SEC && !queue.playedUrls.has(r.url)
     );
 
     if (!next) {
-      queue.playing = false;
-      queue.leaveTimer = setTimeout(() => disconnect(guildId), LEAVE_TIMEOUT);
+      // fallback: 마지막 곡 제목으로 검색
+      const fallbackResults = await play.search(lastTrack.title + " music", { limit: 10, source: { youtube: "video" } });
+      const fallbackNext = fallbackResults.find(r =>
+        (r.durationInSec || 0) <= MAX_DURATION_SEC && !queue.playedUrls.has(r.url)
+      );
+
+      if (!fallbackNext) {
+        queue.playing = false;
+        queue.leaveTimer = setTimeout(() => disconnect(guildId), LEAVE_TIMEOUT);
+        return;
+      }
+
+      const track: Track = {
+        title: fallbackNext.title || "Unknown",
+        url: fallbackNext.url,
+        duration: formatDuration(fallbackNext.durationInSec || 0),
+        thumbnail: fallbackNext.thumbnails?.[0]?.url || "",
+        requestedBy: "Autoplay",
+      };
+      queue.tracks.push(track);
+      await playNext(guildId);
+      console.log(`[Autoplay/fallback] ${track.title}`);
       return;
     }
 
@@ -303,12 +331,50 @@ async function autoplayNext(guildId: string, lastTrack: Track): Promise<void> {
 
     queue.tracks.push(track);
     await playNext(guildId);
-    console.log(`[Autoplay] ${track.title}`);
+    console.log(`[Autoplay] ${track.title} (query: ${searchQuery})`);
   } catch (err) {
     console.error("Autoplay 실패:", (err as Error).message);
     queue.playing = false;
     queue.leaveTimer = setTimeout(() => disconnect(guildId), LEAVE_TIMEOUT);
   }
+}
+
+function buildAutoplayQuery(queue: GuildQueue, lastTrack: Track): string {
+  const lastArtist = parseArtist(lastTrack.title);
+
+  // 아티스트 히스토리가 있으면 가중치 랜덤으로 선택
+  if (queue.artistHistory.size > 0) {
+    const artists = [...queue.artistHistory.entries()];
+    const totalWeight = artists.reduce((sum, [, count]) => sum + count, 0);
+    let rand = Math.random() * totalWeight;
+
+    for (const [artist, count] of artists) {
+      rand -= count;
+      if (rand <= 0) {
+        return `${artist} music`;
+      }
+    }
+  }
+
+  // 아티스트 파싱 가능하면 그 아티스트로
+  if (lastArtist) return `${lastArtist} music`;
+
+  // fallback
+  return `${lastTrack.title} music`;
+}
+
+function parseArtist(title: string): string | null {
+  // "Artist - Title", "Artist — Title", "Artist | Title" 패턴
+  const separators = [" - ", " — ", " – ", " | "];
+  for (const sep of separators) {
+    const idx = title.indexOf(sep);
+    if (idx > 0) {
+      const artist = title.slice(0, idx).trim();
+      // 너무 짧거나 긴 건 아티스트가 아닐 수 있음
+      if (artist.length >= 2 && artist.length <= 50) return artist;
+    }
+  }
+  return null;
 }
 
 function formatDuration(seconds: number): string {
