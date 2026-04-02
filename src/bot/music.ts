@@ -110,7 +110,7 @@ export async function searchTracks(query: string, requestedBy: string, limit: nu
       }];
     }
 
-    const results = await play.search(query, { limit, source: { youtube: "video" } });
+    const results = await play.search(query + " music", { limit, source: { youtube: "video" } });
     return results.map(info => ({
       title: info.title || "Unknown",
       url: info.url,
