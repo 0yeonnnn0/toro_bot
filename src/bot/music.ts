@@ -96,28 +96,35 @@ export function isPlaying(guildId: string): boolean {
 
 // ── Internal ──
 
+const MAX_DURATION_SEC = 20 * 60; // 20분
+
 export async function searchTracks(query: string, requestedBy: string, limit: number = 5): Promise<Track[]> {
   try {
     if (play.yt_validate(query) === "video") {
       const details = await play.video_basic_info(query);
       const info = details.video_details;
+      const sec = info.durationInSec || 0;
+      if (sec > MAX_DURATION_SEC) return [];
       return [{
         title: info.title || "Unknown",
         url: info.url,
-        duration: formatDuration(info.durationInSec || 0),
+        duration: formatDuration(sec),
         thumbnail: info.thumbnails?.[0]?.url || "",
         requestedBy,
       }];
     }
 
-    const results = await play.search(query + " music", { limit, source: { youtube: "video" } });
-    return results.map(info => ({
-      title: info.title || "Unknown",
-      url: info.url,
-      duration: formatDuration(info.durationInSec || 0),
-      thumbnail: info.thumbnails?.[0]?.url || "",
-      requestedBy,
-    }));
+    const results = await play.search(query + " music", { limit: limit + 5, source: { youtube: "video" } });
+    return results
+      .filter(info => (info.durationInSec || 0) <= MAX_DURATION_SEC)
+      .slice(0, limit)
+      .map(info => ({
+        title: info.title || "Unknown",
+        url: info.url,
+        duration: formatDuration(info.durationInSec || 0),
+        thumbnail: info.thumbnails?.[0]?.url || "",
+        requestedBy,
+      }));
   } catch (err) {
     console.error("유튜브 검색 실패:", (err as Error).message);
     return [];
