@@ -545,6 +545,9 @@ export function isChannelMuted(channelId: string): boolean {
 }
 
 // ── /play ──
+const SEARCH_PER_PAGE = 5;
+const SEARCH_TOTAL = 15; // 최대 3페이지
+
 async function handlePlay(interaction: ChatInputCommandInteraction): Promise<void> {
   const query = interaction.options.getString("query", true);
   const member = interaction.guild?.members.cache.get(interaction.user.id);
@@ -558,107 +561,141 @@ async function handlePlay(interaction: ChatInputCommandInteraction): Promise<voi
   await interaction.deferReply({ flags: ['Ephemeral'] });
 
   try {
-    const results = await searchTracks(query, interaction.user.displayName, 4);
-
-    if (results.length === 0) {
-      await interaction.editReply("검색 결과가 없다냥... @д@");
-      return;
-    }
-
     // URL 직접 입력이면 바로 재생
-    if (results.length === 1 && query.includes("youtube.com/") || query.includes("youtu.be/")) {
+    if (query.includes("youtube.com/") || query.includes("youtu.be/")) {
+      const results = await searchTracks(query, interaction.user.displayName, 1);
+      if (results.length === 0) {
+        await interaction.editReply("URL을 찾을 수 없어");
+        return;
+      }
       const position = await playTrackDirect(voiceChannel, results[0]);
       await interaction.editReply({ embeds: [makePlayEmbed(results[0], position)] });
       return;
     }
 
-    // 검색 결과 목록 표시
-    const list = results.map((t, i) =>
-      `**${i + 1}.** [${t.title}](${t.url}) (${t.duration})`
-    ).join("\n");
+    const allResults = await searchTracks(query, interaction.user.displayName, SEARCH_TOTAL);
+    // play-dl이 limit+5개 검색하므로 실제로 15~20개까지 나올 수 있음
 
-    const embed = {
-      color: 0x3182f6,
-      title: `"${query}" 검색 결과`,
-      description: list,
-      footer: { text: "30초 안에 선택해줘" },
-    };
-
-    // 1~5번 버튼 + URL 직접 입력 버튼
-    const buttons = results.map((_, i) =>
-      new ButtonBuilder()
-        .setCustomId(`play_${i}`)
-        .setLabel(`${i + 1}`)
-        .setStyle(ButtonStyle.Primary)
-    );
-    buttons.push(
-      new ButtonBuilder()
-        .setCustomId("play_url")
-        .setLabel("URL 입력")
-        .setStyle(ButtonStyle.Secondary)
-    );
-
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
-    const msg = await interaction.editReply({ embeds: [embed], components: [row] });
-
-    // 버튼 클릭 대기 (30초)
-    try {
-      const btnInteraction = await msg.awaitMessageComponent({
-        componentType: ComponentType.Button,
-        filter: (i) => i.user.id === interaction.user.id,
-        time: 30000,
-      });
-
-      if (btnInteraction.customId === "play_url") {
-        // URL 입력 모달
-        const modal = new ModalBuilder()
-          .setCustomId("play_url_modal")
-          .setTitle("유튜브 URL 입력")
-          .addComponents(
-            new ActionRowBuilder<TextInputBuilder>().addComponents(
-              new TextInputBuilder()
-                .setCustomId("url_input")
-                .setLabel("유튜브 URL")
-                .setPlaceholder("https://youtube.com/watch?v=...")
-                .setStyle(TextInputStyle.Short)
-                .setRequired(true)
-            )
-          );
-
-        await btnInteraction.showModal(modal);
-
-        try {
-          const modalInteraction = await btnInteraction.awaitModalSubmit({ time: 60000 });
-          const url = modalInteraction.fields.getTextInputValue("url_input");
-          const tracks = await searchTracks(url, interaction.user.displayName, 1);
-
-          if (tracks.length === 0) {
-            await modalInteraction.reply({ content: "URL을 찾을 수 없어", ephemeral: true });
-            await interaction.editReply({ embeds: [embed], components: [] });
-            return;
-          }
-
-          const position = await playTrackDirect(voiceChannel, tracks[0]);
-          await modalInteraction.reply({ embeds: [makePlayEmbed(tracks[0], position)] });
-          await interaction.editReply({ embeds: [embed], components: [] });
-        } catch {
-          await interaction.editReply({ embeds: [embed], components: [] });
-        }
-      } else {
-        // 번호 선택
-        const idx = parseInt(btnInteraction.customId.split("_")[1]);
-        const track = results[idx];
-        const position = await playTrackDirect(voiceChannel, track);
-
-        await btnInteraction.update({ content: "선택 완료", embeds: [], components: [] });
-        await interaction.followUp({ embeds: [makePlayEmbed(track, position)] });
-      }
-    } catch {
-      // 타임아웃 — 버튼 제거
-      await interaction.editReply({ embeds: [embed], components: [] }).catch(() => {});
+    if (allResults.length === 0) {
+      await interaction.editReply("검색 결과가 없다냥... @д@");
+      return;
     }
+
+    let page = 0;
+    await showSearchPage(interaction, voiceChannel, query, allResults, page);
   } catch (err) {
     await interaction.editReply(`에러 발생... @д@ ${(err as Error).message}`);
+  }
+}
+
+async function showSearchPage(
+  interaction: ChatInputCommandInteraction,
+  voiceChannel: any,
+  query: string,
+  allResults: Track[],
+  page: number,
+): Promise<void> {
+  const start = page * SEARCH_PER_PAGE;
+  const pageResults = allResults.slice(start, start + SEARCH_PER_PAGE);
+  const hasMore = start + SEARCH_PER_PAGE < allResults.length;
+
+  const list = pageResults.map((t, i) =>
+    `**${start + i + 1}.** [${t.title}](${t.url}) (${t.duration})`
+  ).join("\n");
+
+  const embed = {
+    color: 0x3182f6,
+    title: `"${query}" 검색 결과`,
+    description: list,
+    footer: { text: `${page + 1}/${Math.ceil(allResults.length / SEARCH_PER_PAGE)} 페이지 • 30초 안에 선택해줘` },
+  };
+
+  // 줄 1: 번호 버튼
+  const numButtons = pageResults.map((_, i) =>
+    new ButtonBuilder()
+      .setCustomId(`play_${start + i}`)
+      .setLabel(`${start + i + 1}`)
+      .setStyle(ButtonStyle.Primary)
+  );
+  const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(numButtons);
+
+  // 줄 2: 더 보기 + URL 입력
+  const row2Buttons: ButtonBuilder[] = [];
+  if (hasMore) {
+    row2Buttons.push(
+      new ButtonBuilder()
+        .setCustomId("play_more")
+        .setLabel("더 보기")
+        .setStyle(ButtonStyle.Secondary)
+    );
+  }
+  row2Buttons.push(
+    new ButtonBuilder()
+      .setCustomId("play_url")
+      .setLabel("URL 입력")
+      .setStyle(ButtonStyle.Secondary)
+  );
+  const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(row2Buttons);
+
+  const msg = await interaction.editReply({ embeds: [embed], components: [row1, row2] });
+
+  try {
+    const btnInteraction = await msg.awaitMessageComponent({
+      componentType: ComponentType.Button,
+      filter: (i) => i.user.id === interaction.user.id,
+      time: 30000,
+    });
+
+    if (btnInteraction.customId === "play_more") {
+      await btnInteraction.deferUpdate();
+      await showSearchPage(interaction, voiceChannel, query, allResults, page + 1);
+
+    } else if (btnInteraction.customId === "play_url") {
+      const modal = new ModalBuilder()
+        .setCustomId("play_url_modal")
+        .setTitle("유튜브 URL 입력")
+        .addComponents(
+          new ActionRowBuilder<TextInputBuilder>().addComponents(
+            new TextInputBuilder()
+              .setCustomId("url_input")
+              .setLabel("유튜브 URL")
+              .setPlaceholder("https://youtube.com/watch?v=...")
+              .setStyle(TextInputStyle.Short)
+              .setRequired(true)
+          )
+        );
+
+      await btnInteraction.showModal(modal);
+
+      try {
+        const modalInteraction = await btnInteraction.awaitModalSubmit({ time: 60000 });
+        const url = modalInteraction.fields.getTextInputValue("url_input");
+        const tracks = await searchTracks(url, interaction.user.displayName, 1);
+
+        if (tracks.length === 0) {
+          await modalInteraction.reply({ content: "URL을 찾을 수 없어", ephemeral: true });
+          await interaction.editReply({ embeds: [embed], components: [] });
+          return;
+        }
+
+        const position = await playTrackDirect(voiceChannel, tracks[0]);
+        await modalInteraction.reply({ embeds: [makePlayEmbed(tracks[0], position)] });
+        await interaction.editReply({ embeds: [embed], components: [] });
+      } catch {
+        await interaction.editReply({ embeds: [embed], components: [] });
+      }
+
+    } else {
+      // 번호 선택
+      const idx = parseInt(btnInteraction.customId.split("_")[1]);
+      const track = allResults[idx];
+      const position = await playTrackDirect(voiceChannel, track);
+
+      await btnInteraction.update({ content: "선택 완료", embeds: [], components: [] });
+      await interaction.followUp({ embeds: [makePlayEmbed(track, position)] });
+    }
+  } catch {
+    await interaction.editReply({ embeds: [embed], components: [] }).catch(() => {});
   }
 }
 
