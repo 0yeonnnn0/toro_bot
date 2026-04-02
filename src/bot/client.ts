@@ -10,6 +10,18 @@ import { fetchUrlContext } from "./scrape";
 import { getUserContext, extractAndSave } from "./vault";
 import type { ImageData } from "./history";
 
+// @이름 → <@유저ID> 변환
+function resolveMentions(text: string, message: Message): string {
+  const guild = message.guild;
+  if (!guild) return text;
+  return text.replace(/@(\S+)/g, (match, name) => {
+    const member = guild.members.cache.find(m =>
+      m.displayName === name || m.user.username === name || m.nickname === name
+    );
+    return member ? `<@${member.id}>` : match;
+  });
+}
+
 const IMAGE_MIMES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 const MAX_IMAGE_SIZE = 4 * 1024 * 1024; // 4MB
 
@@ -166,7 +178,8 @@ async function triggerJudge(channelId: string, message: Message, channelName: st
 
     markUserRequest(message.author.id);
 
-    await message.reply(reply);
+    const resolvedReply = resolveMentions(reply, message);
+    await message.reply(resolvedReply);
     history.addMessage(channelId, { role: "assistant", content: reply });
     state.stats.repliesSent++;
     trackUser(message.author.id, message.author.displayName, true);
@@ -346,7 +359,8 @@ client.on("messageCreate", async (message: Message) => {
       return;
     }
 
-    await sendReply(reply);
+    const resolved = resolveMentions(reply, message);
+    await sendReply(resolved);
     history.addMessage(channelId, { role: "assistant", content: reply });
     state.stats.repliesSent++;
 
@@ -361,7 +375,7 @@ client.on("messageCreate", async (message: Message) => {
       content: cleanContent,
       botReplied: true,
       triggerReason: "mention",
-      botReply: reply,
+      botReply: resolved,
       responseTime,
       ragHits: ragHitCount,
       error: null,
