@@ -158,17 +158,36 @@ export async function searchTracks(query: string, requestedBy: string, limit: nu
       }];
     }
 
-    const results = await play.search(query + " music", { limit: limit + 5, source: { youtube: "video" } });
-    return results
-      .filter(info => (info.durationInSec || 0) <= MAX_DURATION_SEC)
-      .slice(0, limit)
-      .map(info => ({
-        title: info.title || "Unknown",
-        url: info.url,
-        duration: formatDuration(info.durationInSec || 0),
-        thumbnail: info.thumbnails?.[0]?.url || "",
-        requestedBy,
-      }));
+    // yt-dlp로 유튜브 뮤직 검색
+    const searchResults = await new Promise<string>((resolve, reject) => {
+      const proc = spawn("yt-dlp", [
+        `ytmsearch${limit + 5}:${query}`,
+        "--print", "%(title)s\t%(id)s\t%(duration_string)s\t%(thumbnail)s",
+        "--no-warnings", "--quiet",
+      ]);
+      let out = "";
+      proc.stdout.on("data", (d) => out += d.toString());
+      proc.stderr.on("data", () => {});
+      proc.on("error", reject);
+      proc.on("close", (code) => code === 0 ? resolve(out) : reject(new Error("ytmusic search failed")));
+      setTimeout(() => { proc.kill(); reject(new Error("timeout")); }, 15000);
+    });
+
+    const lines = searchResults.trim().split("\n").filter(l => l.includes("\t"));
+    return lines
+      .map(line => {
+        const [title, id, dur, thumb] = line.split("\t");
+        return {
+          title: title || "Unknown",
+          url: `https://www.youtube.com/watch?v=${id}`,
+          duration: formatDuration(parseDurationStr(dur || "0")),
+          durationInSec: parseDurationStr(dur || "0"),
+          thumbnail: thumb || "",
+          requestedBy,
+        };
+      })
+      .filter(t => t.durationInSec <= MAX_DURATION_SEC)
+      .slice(0, limit);
   } catch (err) {
     console.error("유튜브 검색 실패:", (err as Error).message);
     return [];
