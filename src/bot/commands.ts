@@ -26,6 +26,10 @@ import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, paus
 // ── Command Definitions ──
 export const commands = [
   new SlashCommandBuilder()
+    .setName("help")
+    .setDescription("TORO 사용 가이드"),
+
+  new SlashCommandBuilder()
     .setName("mode")
     .setDescription("봇 프리셋 관리")
     .addSubcommand(sub =>
@@ -209,6 +213,9 @@ export async function handleInteraction(interaction: ChatInputCommandInteraction
   const { commandName } = interaction;
 
   switch (commandName) {
+    case "help":
+      await handleHelp(interaction);
+      break;
     case "mode":
       await handleMode(interaction);
       break;
@@ -267,6 +274,56 @@ export async function handleInteraction(interaction: ChatInputCommandInteraction
       await handleAutoplay(interaction);
       break;
   }
+}
+
+// ── /help ──
+async function handleHelp(interaction: ChatInputCommandInteraction): Promise<void> {
+  const embed = {
+    color: 0x3182f6,
+    title: "🐱 TORO 사용 가이드",
+    fields: [
+      {
+        name: "💬 대화",
+        value: [
+          "`@TORO` — 멘션하면 답변",
+          "`/summary` — 최근 대화 요약",
+          "`/mode` — 성격 프리셋 변경",
+        ].join("\n"),
+      },
+      {
+        name: "🎵 음악",
+        value: [
+          "`/play` — 유튜브 음악 검색/재생",
+          "`/skip` · `/stop` · `/pause` — 재생 컨트롤",
+          "`/queue` · `/remove` — 대기열 관리",
+          "`/nowplaying` — 현재 곡 정보",
+          "`/volume` — 볼륨 조절",
+          "`/autoplay` — 자동 추천 재생 (장르 선택)",
+        ].join("\n"),
+      },
+      {
+        name: "🎨 생성",
+        value: [
+          "`/draw` — AI 이미지 생성",
+          "`/say` — 음성으로 답변 (TTS)",
+        ].join("\n"),
+      },
+      {
+        name: "🧠 기억",
+        value: "`/내정보` — 봇이 기억하는 내 정보 확인",
+      },
+      {
+        name: "⚙️ 설정",
+        value: [
+          "`/reply` — 응답 모드 변경",
+          "`/mute` — 채널 음소거",
+          "`/status` — 봇 상태 확인",
+        ].join("\n"),
+      },
+    ],
+  };
+
+  await interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
 // ── /모드 ──

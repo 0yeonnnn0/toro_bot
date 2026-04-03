@@ -114,9 +114,9 @@ client.on("guildMemberAdd", async (member) => {
       content: `새로운 멤버 "${member.user.displayName}"이(가) 서버에 들어왔어. 환영 인사를 해줘. 짧게.`,
     }];
     const reply = await getReply(history, "", "");
-    await channel.send(`${member} ${reply}`);
+    await channel.send(`${member} ${reply}\n와타시쟝은 TORO다냥!\nTORO에 대해 궁금하다면 \`/help\` 로 확인해라냥!`);
   } catch {
-    await channel.send(`${member} 어서오라냥! >w<`).catch(() => {});
+    await channel.send(`${member} 어서오라냥! >w<\n와타시쟝은 TORO다냥!\nTORO에 대해 궁금하다면 \`/help\` 로 확인해라냥!`).catch(() => {});
   }
 });
 client.on("guildDelete", (guild) => addEvent("guild_leave", guild.name));
