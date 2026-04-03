@@ -232,43 +232,46 @@ client.on("messageCreate", async (message: Message) => {
 
   const imageData = await extractImage(message);
 
+  const isMentioned = message.mentions.has(client.user!);
+  const shouldLog = isMentioned || state.config.passiveLogging;
+
   history.addMessage(channelId, {
     role: "user",
     content: `${message.author.displayName}: ${cleanContent}${imageData ? " [이미지 첨부]" : ""}`,
     imageData,
   });
 
-  state.stats.messagesProcessed++;
-  trackKeywords(cleanContent);
+  if (shouldLog) {
+    state.stats.messagesProcessed++;
+    trackKeywords(cleanContent);
 
-  if (!conversationBuffer.has(channelId)) {
-    conversationBuffer.set(channelId, []);
-  }
-  const buffer = conversationBuffer.get(channelId)!;
-  buffer.push({ content: `${message.author.displayName}: ${cleanContent}` });
-  if (buffer.length >= BUFFER_SIZE) {
-    rag.storeConversation({
+    if (!conversationBuffer.has(channelId)) {
+      conversationBuffer.set(channelId, []);
+    }
+    const buffer = conversationBuffer.get(channelId)!;
+    buffer.push({ content: `${message.author.displayName}: ${cleanContent}` });
+    if (buffer.length >= BUFFER_SIZE) {
+      rag.storeConversation({
+        channel: channelName,
+        messages: buffer.splice(0),
+        timestamp: Date.now(),
+      });
+    }
+
+    addLog({
+      guild: guildName,
       channel: channelName,
-      messages: buffer.splice(0),
-      timestamp: Date.now(),
+      author: message.author.displayName,
+      content: cleanContent,
+      botReplied: false,
+      triggerReason: null,
+      botReply: null,
+      responseTime: null,
+      ragHits: 0,
+      error: null,
+      model: null,
     });
   }
-
-  const isMentioned = message.mentions.has(client.user!);
-
-  addLog({
-    guild: guildName,
-    channel: channelName,
-    author: message.author.displayName,
-    content: cleanContent,
-    botReplied: false,
-    triggerReason: null,
-    botReply: null,
-    responseTime: null,
-    ragHits: 0,
-    error: null,
-    model: null,
-  });
 
   // Mentioned → always reply. Otherwise → mode-based auto-participation.
   if (!isMentioned) {
