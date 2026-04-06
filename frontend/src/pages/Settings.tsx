@@ -45,6 +45,7 @@ export default function Settings() {
   const [judgePrompt, setJudgePrompt] = useState('')
   const [defaultJudgePrompt, setDefaultJudgePrompt] = useState('')
   const [imageRecognition, setImageRecognition] = useState(true)
+  const [passiveLogging, setPassiveLogging] = useState(true)
   const [embeddingModel, setEmbeddingModel] = useState('text-embedding-004')
   const [webShowNickname, setWebShowNickname] = useState(false)
   const [webSystemPrompt, setWebSystemPrompt] = useState('')
@@ -87,6 +88,7 @@ export default function Settings() {
       setJudgePrompt(d.judgePrompt || '')
       setDefaultJudgePrompt(d.defaultJudgePrompt || '')
       setImageRecognition(d.imageRecognition ?? true)
+      setPassiveLogging(d.passiveLogging ?? true)
       setEmbeddingModel(d.embeddingModel || 'text-embedding-004')
       setWebShowNickname(d.webShowNickname ?? false)
       setWebSystemPrompt(d.webSystemPrompt || '')
@@ -421,6 +423,22 @@ export default function Settings() {
                 이미지 인식 (Gemini Vision)
               </label>
               <p className="form-hint">디스코드에 첨부된 이미지를 AI가 인식하여 대화에 반영합니다. Google 모델에서만 동작.</p>
+            </div>
+
+            <div style={{ marginTop: 'var(--space-4)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer' }}>
+                <input type="checkbox" checked={passiveLogging}
+                  onChange={e => {
+                    setPassiveLogging(e.target.checked)
+                    fetch('/api/config', {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ passiveLogging: e.target.checked }),
+                    }).then(() => toast.success(e.target.checked ? '대화 수집 켜짐' : '대화 수집 꺼짐')).catch(() => {})
+                  }} />
+                대화 수집 (로그 · RAG · 통계)
+              </label>
+              <p className="form-hint">꺼두면 멘션이 아닌 일반 대화는 로그, RAG 메모리, 키워드 통계에 기록되지 않습니다. 멘션 대화는 항상 기록됩니다.</p>
             </div>
           </div>
 

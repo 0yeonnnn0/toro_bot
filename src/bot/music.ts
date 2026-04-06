@@ -298,12 +298,15 @@ async function playNext(guildId: string): Promise<void> {
       "-o", "-",
       "--no-warnings",
       "--quiet",
+      "--buffer-size", "16K",
       track.url,
     ]);
 
     const ffmpeg = spawn("ffmpeg", [
+      "-thread_queue_size", "4096",
       "-i", "pipe:0",
-      "-analyzeduration", "0",
+      "-analyzeduration", "2000000",
+      "-probesize", "1000000",
       "-loglevel", "0",
       "-af", `volume=${queue.volume}`,
       "-f", "opus",
