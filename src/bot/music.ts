@@ -12,6 +12,7 @@ import {
 } from "@discordjs/voice";
 import play from "play-dl";
 import { spawn } from "child_process";
+import { PassThrough } from "stream";
 import { ActivityType, type VoiceBasedChannel } from "discord.js";
 import { client } from "./client";
 
@@ -41,6 +42,17 @@ interface GuildQueue {
 // ── State ──
 const queues = new Map<string, GuildQueue>();
 const LEAVE_TIMEOUT = 5 * 60 * 1000; // 5분
+
+// 곡 변경 콜백 — 컨트롤러 UI 업데이트용
+type TrackChangeListener = (guildId: string, track: Track | null) => void;
+let onTrackChange: TrackChangeListener | null = null;
+export function setOnTrackChange(listener: TrackChangeListener): void {
+  onTrackChange = listener;
+}
+
+function emitTrackChange(guildId: string, track: Track | null): void {
+  onTrackChange?.(guildId, track);
+}
 
 // ── Public API ──
 
@@ -107,6 +119,22 @@ export function setAutoplay(guildId: string, genre: string | null): boolean {
   }
   queue.autoplay = true;
   queue.autoplayGenre = genre;
+
+  // 현재 곡 기준으로 히스토리 리셋 → 추천 방향 전환
+  const current = queue.tracks[0];
+  if (current) {
+    queue.playedUrls.clear();
+    queue.playedTitles.clear();
+    queue.artistHistory.clear();
+    queue.playedUrls.add(current.url);
+    queue.playedTitles.add(normTitle(current.title));
+    const artist = parseArtist(current.title);
+    if (artist) queue.artistHistory.set(artist, 1);
+
+    // 기존 autoplay 곡 제거 (유저 요청 곡은 유지)
+    queue.tracks = [current, ...queue.tracks.slice(1).filter(t => !t.requestedBy.startsWith("Autoplay"))];
+  }
+
   return true;
 }
 
@@ -135,6 +163,11 @@ export async function triggerAutoplayNow(guildId: string): Promise<void> {
 
 export function isPlaying(guildId: string): boolean {
   return queues.get(guildId)?.playing || false;
+}
+
+export function isPaused(guildId: string): boolean {
+  const queue = queues.get(guildId);
+  return queue?.player.state.status === AudioPlayerStatus.Paused;
 }
 
 // ── Internal ──
@@ -210,7 +243,7 @@ export async function playTrackDirect(
       connection,
       playing: false,
       leaveTimer: null,
-      autoplay: false,
+      autoplay: true,
       autoplayGenre: null,
       playedUrls: new Set(),
       playedTitles: new Set(),
@@ -292,24 +325,27 @@ async function playNext(guildId: string): Promise<void> {
   const track = queue.tracks[0];
 
   try {
-    // yt-dlp로 오디오 스트림 추출 → FFmpeg로 opus 변환
+    // yt-dlp로 오디오 다운로드 → FFmpeg로 PCM 변환 → 프리버퍼 후 재생
     const ytdlp = spawn("yt-dlp", [
-      "-f", "bestaudio",
+      "-f", "bestaudio[acodec=opus]/bestaudio",
       "-o", "-",
       "--no-warnings",
       "--quiet",
-      "--buffer-size", "16K",
+      "--no-part",
+      "--buffer-size", "1M",
+      "--retries", "3",
+      "--fragment-retries", "3",
       track.url,
     ]);
 
     const ffmpeg = spawn("ffmpeg", [
-      "-thread_queue_size", "4096",
+      "-thread_queue_size", "8192",
       "-i", "pipe:0",
-      "-analyzeduration", "2000000",
-      "-probesize", "1000000",
+      "-analyzeduration", "0",
+      "-probesize", "500000",
       "-loglevel", "0",
       "-af", `volume=${queue.volume}`,
-      "-f", "opus",
+      "-f", "s16le",
       "-ar", "48000",
       "-ac", "2",
       "pipe:1",
@@ -328,10 +364,41 @@ async function playNext(guildId: string): Promise<void> {
     ytdlp.stderr.on("data", (d) => console.error("yt-dlp:", d.toString().trim()));
     ffmpeg.stderr.on("data", (d) => console.error("ffmpeg:", d.toString().trim()));
 
-    const resource = createAudioResource(ffmpeg.stdout, { inputType: StreamType.OggOpus });
+    // 프리버퍼: 192KB (약 1초 분량의 PCM) 쌓인 후 재생 시작
+    const PRE_BUFFER_SIZE = 192 * 1024;
+    const preBuffer: Buffer[] = [];
+    let preBufferBytes = 0;
+    let flushed = false;
+    const output = new PassThrough({ highWaterMark: 512 * 1024 });
+
+    ffmpeg.stdout.on("data", (chunk: Buffer) => {
+      if (flushed) {
+        output.write(chunk);
+        return;
+      }
+      preBuffer.push(chunk);
+      preBufferBytes += chunk.length;
+      if (preBufferBytes >= PRE_BUFFER_SIZE) {
+        flushed = true;
+        for (const buf of preBuffer) output.write(buf);
+        preBuffer.length = 0;
+      }
+    });
+    ffmpeg.stdout.on("end", () => {
+      // 프리버퍼 못 채운 짧은 곡 — 있는 만큼 flush
+      if (!flushed) {
+        for (const buf of preBuffer) output.write(buf);
+        preBuffer.length = 0;
+      }
+      output.end();
+    });
+    ffmpeg.stdout.on("error", (err) => output.destroy(err));
+
+    const resource = createAudioResource(output, { inputType: StreamType.Raw });
     queue.player.play(resource);
     queue.playing = true;
     setNowPlayingActivity(track.title);
+    emitTrackChange(guildId, track);
   } catch (err) {
     console.error("스트림 생성 실패:", (err as Error).message);
     queue.tracks.shift();
@@ -339,6 +406,7 @@ async function playNext(guildId: string): Promise<void> {
       playNext(guildId);
     } else {
       queue.playing = false;
+      emitTrackChange(guildId, null);
     }
   }
 }
@@ -354,6 +422,7 @@ function disconnect(guildId: string): void {
     const conn = getVoiceConnection(guildId);
     conn?.destroy();
   }
+  emitTrackChange(guildId, null);
   clearActivity();
 }
 
