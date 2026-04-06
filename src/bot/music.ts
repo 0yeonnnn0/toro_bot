@@ -203,19 +203,17 @@ function ytdlpGetInfo(url: string): Promise<{ title: string; url: string; durati
 
 function ytdlpSearch(query: string, requestedBy: string, limit: number): Promise<Track[]> {
   return new Promise((resolve) => {
-    // 15분 필터로 많이 걸러지므로 넉넉히 요청
-    const fetchCount = Math.min(limit * 5, 50);
+    const fetchCount = Math.min(limit + 5, 20);
     const proc = spawn("yt-dlp", [
       `ytsearch${fetchCount}:${query}`,
+      "--flat-playlist",
       "--print", "%(title)s\t%(id)s\t%(duration)s\t%(thumbnail)s",
-      "--match-filters", `duration<=${MAX_DURATION_SEC}`,
       "--no-warnings", "--quiet",
     ]);
     let out = "";
     proc.stdout.on("data", (d) => out += d.toString());
     proc.on("error", () => resolve([]));
-    proc.on("close", (code) => {
-      if (code !== 0) return resolve([]);
+    proc.on("close", () => {
       const tracks: Track[] = [];
       for (const line of out.trim().split("\n")) {
         if (tracks.length >= limit) break;
@@ -233,7 +231,7 @@ function ytdlpSearch(query: string, requestedBy: string, limit: number): Promise
       }
       resolve(tracks);
     });
-    setTimeout(() => { proc.kill(); resolve([]); }, 15000);
+    setTimeout(() => { proc.kill(); resolve([]); }, 30000);
   });
 }
 
