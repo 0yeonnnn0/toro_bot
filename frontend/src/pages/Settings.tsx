@@ -46,7 +46,7 @@ export default function Settings() {
   const [defaultJudgePrompt, setDefaultJudgePrompt] = useState('')
   const [imageRecognition, setImageRecognition] = useState(true)
   const [passiveLogging, setPassiveLogging] = useState(true)
-  const [embeddingModel, setEmbeddingModel] = useState('text-embedding-004')
+  const [embeddingModel, setEmbeddingModel] = useState('gemini-embedding-001')
   const [webShowNickname, setWebShowNickname] = useState(false)
   const [webSystemPrompt, setWebSystemPrompt] = useState('')
   const [presets, setPresets] = useState<PresetInfo[]>([])
@@ -89,7 +89,7 @@ export default function Settings() {
       setDefaultJudgePrompt(d.defaultJudgePrompt || '')
       setImageRecognition(d.imageRecognition ?? true)
       setPassiveLogging(d.passiveLogging ?? true)
-      setEmbeddingModel(d.embeddingModel || 'text-embedding-004')
+      setEmbeddingModel(d.embeddingModel || 'gemini-embedding-001')
       setWebShowNickname(d.webShowNickname ?? false)
       setWebSystemPrompt(d.webSystemPrompt || '')
     }).catch(() => toast.error('설정 로드 실패'))
@@ -402,7 +402,6 @@ export default function Settings() {
                     body: JSON.stringify({ embeddingModel: e.target.value }),
                   }).then(() => toast.success(`임베딩 모델: ${e.target.value}`)).catch(() => {})
                 }} className="model-select" style={{ flex: 1, minWidth: 0 }}>
-                  <option value="text-embedding-004">text-embedding-004</option>
                   <option value="gemini-embedding-001">gemini-embedding-001</option>
                   <option value="embedding-001">embedding-001</option>
                 </select>
