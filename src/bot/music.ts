@@ -13,6 +13,7 @@ import {
 import { spawn } from "child_process";
 import { PassThrough } from "stream";
 import { ActivityType, type VoiceBasedChannel } from "discord.js";
+import { addMusicLog } from "../dashboard/music-logs";
 import { client } from "./client";
 
 // ── Types ──
@@ -440,6 +441,14 @@ async function playNext(guildId: string): Promise<void> {
     queue.player.play(resource);
     queue.playing = true;
     setNowPlayingActivity(track.title);
+    addMusicLog({
+      title: track.title,
+      artist: parseArtist(track.title),
+      url: track.url,
+      duration: track.duration,
+      thumbnail: track.thumbnail,
+      requestedBy: track.requestedBy,
+    });
 
   } catch (err) {
     console.error("스트림 생성 실패:", (err as Error).message);
