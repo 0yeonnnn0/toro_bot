@@ -967,19 +967,19 @@ function buildControllerButtons(paused: boolean) {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
     new ButtonBuilder()
       .setCustomId("music_prev")
-      .setEmoji("⏮")
+      .setLabel("◁◁")
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId("music_pause")
-      .setEmoji(paused ? "▶️" : "⏸️")
+      .setLabel(paused ? "▶" : "❚❚")
       .setStyle(paused ? ButtonStyle.Success : ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId("music_stop")
-      .setEmoji("⏹")
+      .setLabel("■")
       .setStyle(ButtonStyle.Danger),
     new ButtonBuilder()
       .setCustomId("music_skip")
-      .setEmoji("⏭")
+      .setLabel("▷▷")
       .setStyle(ButtonStyle.Secondary),
   );
 }
