@@ -10,7 +10,6 @@ import {
   type AudioPlayer,
   type VoiceConnection,
 } from "@discordjs/voice";
-import play from "play-dl";
 import { spawn } from "child_process";
 import { PassThrough } from "stream";
 import { ActivityType, type VoiceBasedChannel } from "discord.js";
@@ -187,34 +186,84 @@ function cleanYoutubeUrl(url: string): string {
   return url;
 }
 
+function ytdlpGetInfo(url: string): Promise<{ title: string; url: string; duration: number; thumbnail: string } | null> {
+  return new Promise((resolve) => {
+    const proc = spawn("yt-dlp", [
+      "--print", "%(title)s\t%(id)s\t%(duration)s\t%(thumbnail)s",
+      "--no-warnings", "--quiet", "--no-playlist",
+      url,
+    ]);
+    let out = "";
+    proc.stdout.on("data", (d) => out += d.toString());
+    proc.on("error", () => resolve(null));
+    proc.on("close", (code) => {
+      if (code !== 0) return resolve(null);
+      const [title, id, dur, thumb] = out.trim().split("\t");
+      if (!title || !id) return resolve(null);
+      resolve({
+        title,
+        url: `https://www.youtube.com/watch?v=${id}`,
+        duration: parseInt(dur) || 0,
+        thumbnail: thumb || "",
+      });
+    });
+    setTimeout(() => { proc.kill(); resolve(null); }, 10000);
+  });
+}
+
+function ytdlpSearch(query: string, requestedBy: string, limit: number): Promise<Track[]> {
+  return new Promise((resolve) => {
+    const proc = spawn("yt-dlp", [
+      `ytsearch${limit * 2}:${query}`,
+      "--print", "%(title)s\t%(id)s\t%(duration)s\t%(thumbnail)s",
+      "--no-warnings", "--quiet",
+    ]);
+    let out = "";
+    proc.stdout.on("data", (d) => out += d.toString());
+    proc.on("error", () => resolve([]));
+    proc.on("close", (code) => {
+      if (code !== 0) return resolve([]);
+      const tracks: Track[] = [];
+      for (const line of out.trim().split("\n")) {
+        if (tracks.length >= limit) break;
+        const [title, id, dur, thumb] = line.split("\t");
+        if (!title || !id) continue;
+        const sec = parseInt(dur) || 0;
+        if (sec > MAX_DURATION_SEC) continue;
+        tracks.push({
+          title,
+          url: `https://www.youtube.com/watch?v=${id}`,
+          duration: formatDuration(sec),
+          thumbnail: thumb || "",
+          requestedBy,
+        });
+      }
+      resolve(tracks);
+    });
+    setTimeout(() => { proc.kill(); resolve([]); }, 15000);
+  });
+}
+
 export async function searchTracks(query: string, requestedBy: string, limit: number = 5): Promise<Track[]> {
   try {
     const cleaned = cleanYoutubeUrl(query);
-    if (play.yt_validate(cleaned) === "video") {
-      const details = await play.video_basic_info(cleaned);
-      const info = details.video_details;
-      const sec = info.durationInSec || 0;
-      if (sec > MAX_DURATION_SEC) return [];
+    const isUrl = /^https?:\/\/(www\.)?youtube\.com\/watch\?v=/.test(cleaned);
+
+    if (isUrl) {
+      // URL → yt-dlp로 영상 정보 추출
+      const info = await ytdlpGetInfo(cleaned);
+      if (!info || info.duration > MAX_DURATION_SEC) return [];
       return [{
-        title: info.title || "Unknown",
+        title: info.title,
         url: info.url,
-        duration: formatDuration(sec),
-        thumbnail: info.thumbnails?.[0]?.url || "",
+        duration: formatDuration(info.duration),
+        thumbnail: info.thumbnail,
         requestedBy,
       }];
     }
 
-    const results = await play.search(query, { limit, source: { youtube: "video" } });
-    return results
-      .filter(info => (info.durationInSec || 0) <= MAX_DURATION_SEC)
-      .slice(0, limit)
-      .map(info => ({
-        title: info.title || "Unknown",
-        url: info.url,
-        duration: formatDuration(info.durationInSec || 0),
-        thumbnail: info.thumbnails?.[0]?.url || "",
-        requestedBy,
-      }));
+    // 텍스트 검색 → yt-dlp
+    return await ytdlpSearch(query, requestedBy, limit);
   } catch (err) {
     console.error("유튜브 검색 실패:", (err as Error).message);
     return [];
@@ -498,50 +547,20 @@ async function autoplayNext(guildId: string, lastTrack: Track): Promise<void> {
     if (added.length < AUTOPLAY_QUEUE_COUNT) {
       for (let attempt = 0; attempt < 3 && added.length < AUTOPLAY_QUEUE_COUNT; attempt++) {
         const searchQuery = buildAutoplayQuery(queue, lastTrack, attempt);
-        let results: any[] = [];
-        try {
-          results = await play.search(searchQuery, { limit: 15, source: { youtube: "video" } });
-        } catch {
-          // play-dl 실패 → yt-dlp 검색
-          try {
-            const ytdlpSearch = await new Promise<string>((resolve, reject) => {
-              const proc = spawn("yt-dlp", [
-                `ytsearch10:${searchQuery}`,
-                "--get-title", "--get-id", "--get-duration",
-                "--no-warnings", "--quiet",
-              ]);
-              let out = "";
-              proc.stdout.on("data", (d) => out += d.toString());
-              proc.on("close", (code) => code === 0 ? resolve(out) : reject(new Error("search failed")));
-              proc.on("error", reject);
-              setTimeout(() => { proc.kill(); reject(new Error("timeout")); }, 10000);
-            });
-            const searchLines = ytdlpSearch.trim().split("\n");
-            for (let i = 0; i + 2 < searchLines.length; i += 3) {
-              results.push({
-                title: searchLines[i],
-                url: `https://www.youtube.com/watch?v=${searchLines[i + 1]}`,
-                durationInSec: parseDurationStr(searchLines[i + 2]),
-              });
-            }
-          } catch {}
-        }
+        const results = await ytdlpSearch(searchQuery, "Autoplay", 15);
 
         for (const r of results) {
           if (added.length >= AUTOPLAY_QUEUE_COUNT) break;
-          const sec = r.durationInSec || 0;
-          const title = r.title || "Unknown";
-          if (sec > MAX_DURATION_SEC) continue;
           if (queue.playedUrls.has(r.url)) continue;
-          if (queue.playedTitles.has(normTitle(title))) continue;
-          if (queue.tracks.some(t => t.url === r.url || normTitle(t.title) === normTitle(title))) continue;
-          if (added.some(a => a.url === r.url || normTitle(a.title) === normTitle(title))) continue;
+          if (queue.playedTitles.has(normTitle(r.title))) continue;
+          if (queue.tracks.some(t => t.url === r.url || normTitle(t.title) === normTitle(r.title))) continue;
+          if (added.some(a => a.url === r.url || normTitle(a.title) === normTitle(r.title))) continue;
 
           added.push({
-            title,
+            title: r.title,
             url: r.url,
-            duration: formatDuration(sec),
-            thumbnail: r.thumbnails?.[0]?.url || "",
+            duration: r.duration,
+            thumbnail: r.thumbnail,
             requestedBy: "Autoplay",
           });
         }
