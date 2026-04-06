@@ -287,6 +287,7 @@ async function handleHelp(interaction: ChatInputCommandInteraction): Promise<voi
         name: "💬 대화",
         value: [
           "`@TORO` — 멘션하면 답변",
+          "`/ask` — 1:1 질문",
           "`/summary` — 최근 대화 요약",
           "`/mode` — 성격 프리셋 변경",
         ].join("\n"),
@@ -295,11 +296,11 @@ async function handleHelp(interaction: ChatInputCommandInteraction): Promise<voi
         name: "🎵 음악",
         value: [
           "`/play` — 유튜브 음악 검색/재생",
+          "`/nowplaying` — 현재 곡 + 컨트롤러 (◁◁ ❚❚ ■ ▷▷)",
           "`/skip` · `/stop` · `/pause` — 재생 컨트롤",
           "`/queue` · `/remove` — 대기열 관리",
-          "`/nowplaying` — 현재 곡 정보",
-          "`/volume` — 볼륨 조절",
-          "`/autoplay` — 자동 추천 재생 (장르 선택)",
+          "`/volume` — 볼륨 조절 (현재 곡에 즉시 적용)",
+          "`/autoplay` — 자동 추천 재생 (장르 선택 가능)",
         ].join("\n"),
       },
       {
@@ -316,15 +317,16 @@ async function handleHelp(interaction: ChatInputCommandInteraction): Promise<voi
       {
         name: "⚙️ 설정",
         value: [
-          "`/reply` — 응답 모드 변경",
+          "`/reply` — 응답 모드 변경 (auto/interval/mute)",
           "`/mute` — 채널 음소거",
+          "`/mute-status` — 음소거 상태 확인",
           "`/status` — 봇 상태 확인",
         ].join("\n"),
       },
     ],
   };
 
-  await interaction.reply({ embeds: [embed], ephemeral: true });
+  await interaction.reply({ embeds: [embed] });
 }
 
 // ── /모드 ──
