@@ -639,7 +639,7 @@ async function handlePlay(interaction: ChatInputCommandInteraction): Promise<voi
         return;
       }
       const position = await playTrackDirect(voiceChannel, results[0]);
-      await interaction.editReply({ embeds: [makePlayEmbed(results[0], position)] });
+      await interaction.editReply({ embeds: [makePlayEmbed(results[0], position)], components: [buildControllerButtons(false)] });
       return;
     }
 
@@ -748,7 +748,7 @@ async function showSearchPage(
         }
 
         const position = await playTrackDirect(voiceChannel, tracks[0]);
-        await modalInteraction.reply({ embeds: [makePlayEmbed(tracks[0], position)] });
+        await modalInteraction.reply({ embeds: [makePlayEmbed(tracks[0], position)], components: [buildControllerButtons(false)] });
         await interaction.editReply({ embeds: [embed], components: [] });
       } catch {
         await interaction.editReply({ embeds: [embed], components: [] });
@@ -761,7 +761,7 @@ async function showSearchPage(
       const position = await playTrackDirect(voiceChannel, track);
 
       await btnInteraction.update({ content: "선택 완료", embeds: [], components: [] });
-      await interaction.followUp({ embeds: [makePlayEmbed(track, position)] });
+      await interaction.followUp({ embeds: [makePlayEmbed(track, position)], components: [buildControllerButtons(false)] });
     }
   } catch {
     await interaction.editReply({ embeds: [embed], components: [] }).catch(() => {});
