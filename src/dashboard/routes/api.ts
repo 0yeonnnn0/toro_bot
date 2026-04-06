@@ -11,6 +11,7 @@ import { getStats as getRagStats, listVectors, searchRelevant, storeConversation
 import { getReply, callAI, lastUsedModel, DEFAULT_JUDGE_PROMPT } from "../../bot/ai";
 import { getQueueStats } from "../../bot/queue";
 import { addChatLog, getChatLogs, getChatLogStats } from "../chat-logs";
+import { getMusicLogs, getMusicStats } from "../music-logs";
 import { maskKey } from "../../shared/keys";
 import fs from "fs";
 import path from "path";
@@ -387,6 +388,16 @@ router.get("/chat-logs", (req: Request, res: Response) => {
 
 router.get("/chat-logs/stats", (_req: Request, res: Response) => {
   res.json(getChatLogStats());
+});
+
+// Music logs (public)
+router.get("/music-logs", (req: Request, res: Response) => {
+  const limit = parseInt(req.query.limit as string || "100");
+  res.json(getMusicLogs(limit));
+});
+
+router.get("/music-logs/stats", (_req: Request, res: Response) => {
+  res.json(getMusicStats());
 });
 
 export default router;

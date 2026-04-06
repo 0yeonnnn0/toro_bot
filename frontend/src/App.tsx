@@ -7,6 +7,7 @@ import Logs from './pages/Logs'
 import Settings from './pages/Settings'
 import Login from './pages/Login'
 import Chat from './pages/Chat'
+import Music from './pages/Music'
 
 function AdminLayout({ children }: { children: React.ReactNode }) {
   const [authed, setAuthed] = useState<boolean | null>(null)
@@ -38,8 +39,9 @@ function App() {
   return (
     <>
       <Routes>
-        {/* Public chat */}
+        {/* Public pages */}
         <Route path="/chat" element={<Chat />} />
+        <Route path="/music" element={<Music />} />
 
         {/* Admin login */}
         <Route path="/admin/login" element={<Login />} />

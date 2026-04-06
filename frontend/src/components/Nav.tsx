@@ -27,6 +27,7 @@ export default function Nav() {
           <NavLink to="/admin" end>Overview</NavLink>
           <NavLink to="/admin/logs">Logs</NavLink>
           <NavLink to="/admin/settings">Settings</NavLink>
+          <NavLink to="/music">Music</NavLink>
         </div>
         {mounted && (
           <button
