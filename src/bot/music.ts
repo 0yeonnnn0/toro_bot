@@ -37,6 +37,7 @@ interface GuildQueue {
   playedTitles: Set<string>;
   artistHistory: Map<string, number>;
   volume: number; // 0.0 ~ 1.0
+  currentResource: import("@discordjs/voice").AudioResource | null;
 }
 
 // ── State ──
@@ -137,6 +138,7 @@ export function setVolume(guildId: string, vol: number): number {
   const queue = queues.get(guildId);
   if (!queue) return 50;
   queue.volume = Math.max(0, Math.min(1, vol));
+  queue.currentResource?.volume?.setVolume(queue.volume);
   return Math.round(queue.volume * 100);
 }
 
@@ -292,6 +294,7 @@ export async function playTrackDirect(
       playedTitles: new Set(),
       artistHistory: new Map(),
       volume: 0.3,
+      currentResource: null,
     };
     queues.set(channel.guild.id, queue);
 
@@ -387,7 +390,6 @@ async function playNext(guildId: string): Promise<void> {
       "-analyzeduration", "0",
       "-probesize", "500000",
       "-loglevel", "0",
-      "-af", `volume=${queue.volume}`,
       "-f", "s16le",
       "-ar", "48000",
       "-ac", "2",
@@ -437,7 +439,9 @@ async function playNext(guildId: string): Promise<void> {
     });
     ffmpeg.stdout.on("error", (err) => output.destroy(err));
 
-    const resource = createAudioResource(output, { inputType: StreamType.Raw });
+    const resource = createAudioResource(output, { inputType: StreamType.Raw, inlineVolume: true });
+    resource.volume?.setVolume(queue.volume);
+    queue.currentResource = resource;
     queue.player.play(resource);
     queue.playing = true;
     setNowPlayingActivity(track.title);
