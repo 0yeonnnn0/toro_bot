@@ -213,8 +213,7 @@ function ytdlpGetInfo(url: string): Promise<{ title: string; url: string; durati
 
 function ytdlpSearch(query: string, requestedBy: string, limit: number): Promise<Track[]> {
   return new Promise((resolve) => {
-    // 15분 필터로 많이 걸러지므로 넉넉히 요청
-    const fetchCount = Math.min(limit * 5, 50);
+    const fetchCount = Math.min(limit + 5, 20);
     const proc = spawn("yt-dlp", [
       `ytsearch${fetchCount}:${query}`,
       "--flat-playlist",
