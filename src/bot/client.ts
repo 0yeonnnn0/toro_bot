@@ -227,9 +227,21 @@ async function triggerJudge(channelId: string, message: Message, channelName: st
   }
 }
 
+// ── Message deduplication ──
+const recentMessages = new Set<string>();
+const DEDUP_TTL = 10_000; // 10s
+
+function isDuplicate(messageId: string): boolean {
+  if (recentMessages.has(messageId)) return true;
+  recentMessages.add(messageId);
+  setTimeout(() => recentMessages.delete(messageId), DEDUP_TTL);
+  return false;
+}
+
 // ── Message handler ──
 client.on("messageCreate", async (message: Message) => {
   if (message.author.bot) return;
+  if (isDuplicate(message.id)) return;
   if (handleCommand(message)) return;
 
   const channelId = message.channel.id;
