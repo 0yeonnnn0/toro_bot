@@ -172,6 +172,9 @@ router.put("/config", (req: Request, res: Response) => {
   if (req.body.imageRecognition !== undefined) {
     state.config.imageRecognition = !!req.body.imageRecognition;
   }
+  if (req.body.passiveLogging !== undefined) {
+    state.config.passiveLogging = !!req.body.passiveLogging;
+  }
   res.json(safeConfig());
 });
 
