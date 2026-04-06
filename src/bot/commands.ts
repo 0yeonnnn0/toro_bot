@@ -627,7 +627,7 @@ async function handlePlay(interaction: ChatInputCommandInteraction): Promise<voi
     return;
   }
 
-  registerMusicChannel(interaction);
+
 
   await interaction.deferReply({ flags: ['Ephemeral'] });
 
@@ -789,7 +789,7 @@ function makePlayEmbed(track: Track, position: number) {
 async function handleSkip(interaction: ChatInputCommandInteraction): Promise<void> {
   const guildId = interaction.guildId;
   if (!guildId) return;
-  registerMusicChannel(interaction);
+
 
   const skipped = skip(guildId);
   if (skipped) {
@@ -803,7 +803,7 @@ async function handleSkip(interaction: ChatInputCommandInteraction): Promise<voi
 async function handleStop(interaction: ChatInputCommandInteraction): Promise<void> {
   const guildId = interaction.guildId;
   if (!guildId) return;
-  registerMusicChannel(interaction);
+
 
   musicStop(guildId);
   await interaction.reply("음악 정지! 나간다냥 >w<");
@@ -813,7 +813,7 @@ async function handleStop(interaction: ChatInputCommandInteraction): Promise<voi
 async function handlePause(interaction: ChatInputCommandInteraction): Promise<void> {
   const guildId = interaction.guildId;
   if (!guildId) return;
-  registerMusicChannel(interaction);
+
 
   const paused = pause(guildId);
   await interaction.reply(paused ? "일시정지 ⏸️" : "재개 ▶️");
@@ -935,7 +935,7 @@ async function handleRemove(interaction: ChatInputCommandInteraction): Promise<v
 
 // 길드별 컨트롤러 메시지 추적
 const controllerMessages = new Map<string, { channelId: string; messageId: string }>();
-const controllerChannels = new Map<string, string>(); // guildId → 마지막 음악 명령 채널
+const JUKEBOX_CHANNEL_NAME = "주크박스";
 
 function buildControllerEmbed(track: Track, paused: boolean, queue: Track[]) {
   const artist = parseArtist(track.title);
@@ -985,12 +985,15 @@ function buildControllerButtons(paused: boolean) {
 }
 
 async function sendOrUpdateController(guildId: string, track: Track | null): Promise<void> {
-  const channelId = controllerChannels.get(guildId);
-  if (!channelId) return;
-
   const { client } = await import("./client");
-  const channel = client.channels.cache.get(channelId) as TextChannel | undefined;
+  const guild = client.guilds.cache.get(guildId);
+  if (!guild) return;
+
+  const channel = guild.channels.cache.find(
+    ch => ch.name === JUKEBOX_CHANNEL_NAME && ch.type === ChannelType.GuildText
+  ) as TextChannel | undefined;
   if (!channel) return;
+  const channelId = channel.id;
 
   // 곡 없음 → 컨트롤러 삭제
   if (!track) {
@@ -1070,13 +1073,6 @@ export async function handleMusicButton(interaction: ButtonInteraction): Promise
       await interaction.reply({ content: "이전 곡 기능은 아직 없어... 현재 곡을 다시 들으려면 `/play`로 같은 곡을 검색해줘", ephemeral: true });
       break;
     }
-  }
-}
-
-// 음악 명령 채널 등록 — 슬래시 커맨드 핸들러에서 호출
-function registerMusicChannel(interaction: ChatInputCommandInteraction): void {
-  if (interaction.guildId && interaction.channelId) {
-    controllerChannels.set(interaction.guildId, interaction.channelId);
   }
 }
 
