@@ -217,15 +217,14 @@ function ytdlpSearch(query: string, requestedBy: string, limit: number): Promise
     const fetchCount = Math.min(limit * 5, 50);
     const proc = spawn("yt-dlp", [
       `ytsearch${fetchCount}:${query}`,
+      "--flat-playlist",
       "--print", "%(title)s\t%(id)s\t%(duration)s\t%(thumbnail)s",
-      "--match-filters", `duration<=${MAX_DURATION_SEC}`,
       "--no-warnings", "--quiet",
     ]);
     let out = "";
     proc.stdout.on("data", (d) => out += d.toString());
     proc.on("error", () => resolve([]));
-    proc.on("close", (code) => {
-      if (code !== 0) return resolve([]);
+    proc.on("close", () => {
       const tracks: Track[] = [];
       for (const line of out.trim().split("\n")) {
         if (tracks.length >= limit) break;
@@ -243,7 +242,7 @@ function ytdlpSearch(query: string, requestedBy: string, limit: number): Promise
       }
       resolve(tracks);
     });
-    setTimeout(() => { proc.kill(); resolve([]); }, 15000);
+    setTimeout(() => { proc.kill(); resolve([]); }, 30000);
   });
 }
 
