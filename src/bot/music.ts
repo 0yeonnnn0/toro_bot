@@ -43,6 +43,17 @@ interface GuildQueue {
 const queues = new Map<string, GuildQueue>();
 const LEAVE_TIMEOUT = 5 * 60 * 1000; // 5분
 
+// 곡 변경 콜백 — 컨트롤러 UI 업데이트용
+type TrackChangeListener = (guildId: string, track: Track | null) => void;
+let onTrackChange: TrackChangeListener | null = null;
+export function setOnTrackChange(listener: TrackChangeListener): void {
+  onTrackChange = listener;
+}
+
+function emitTrackChange(guildId: string, track: Track | null): void {
+  onTrackChange?.(guildId, track);
+}
+
 // ── Public API ──
 
 export async function playTrack(
@@ -152,6 +163,11 @@ export async function triggerAutoplayNow(guildId: string): Promise<void> {
 
 export function isPlaying(guildId: string): boolean {
   return queues.get(guildId)?.playing || false;
+}
+
+export function isPaused(guildId: string): boolean {
+  const queue = queues.get(guildId);
+  return queue?.player.state.status === AudioPlayerStatus.Paused;
 }
 
 // ── Internal ──
@@ -382,6 +398,7 @@ async function playNext(guildId: string): Promise<void> {
     queue.player.play(resource);
     queue.playing = true;
     setNowPlayingActivity(track.title);
+    emitTrackChange(guildId, track);
   } catch (err) {
     console.error("스트림 생성 실패:", (err as Error).message);
     queue.tracks.shift();
@@ -389,6 +406,7 @@ async function playNext(guildId: string): Promise<void> {
       playNext(guildId);
     } else {
       queue.playing = false;
+      emitTrackChange(guildId, null);
     }
   }
 }
@@ -404,6 +422,7 @@ function disconnect(guildId: string): void {
     const conn = getVoiceConnection(guildId);
     conn?.destroy();
   }
+  emitTrackChange(guildId, null);
   clearActivity();
 }
 
