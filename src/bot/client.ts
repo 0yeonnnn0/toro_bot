@@ -5,7 +5,7 @@ import * as rag from "./rag";
 import { state, addLog, addEvent, addError, trackUser, trackKeywords } from "../shared/state";
 import { enqueue, canUserRequest, markUserRequest } from "./queue";
 import { getPresets, setActivePreset, getActivePresetId } from "./prompt";
-import { registerCommands, handleInteraction, handleAutocomplete, isChannelMuted } from "./commands";
+import { registerCommands, handleInteraction, handleAutocomplete, handleMusicButton, isChannelMuted } from "./commands";
 import { fetchUrlContext } from "./scrape";
 import { getUserContext, extractAndSave } from "./vault";
 import { stop as musicStop } from "./music";
@@ -82,6 +82,10 @@ client.on("interactionCreate", async (interaction) => {
   }
   if (interaction.isChatInputCommand()) {
     await handleInteraction(interaction as ChatInputCommandInteraction);
+    return;
+  }
+  if (interaction.isButton() && interaction.customId.startsWith("music_")) {
+    await handleMusicButton(interaction);
     return;
   }
 });

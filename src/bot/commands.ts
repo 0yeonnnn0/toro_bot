@@ -1,6 +1,7 @@
 import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
+  ButtonInteraction,
   REST,
   Routes,
   TextChannel,
@@ -12,6 +13,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
   ComponentType,
+  type Message,
 } from "discord.js";
 import { getPresets, setActivePreset, getActivePresetId, getPreset } from "./prompt";
 import { getReply } from "./ai";
@@ -21,7 +23,7 @@ import { getStats as getRagStats } from "./rag";
 import { generateImage, type ImageModel } from "./draw";
 import { generateSpeech, VOICES, type VoiceName } from "./tts";
 import { readUserNote, listUserNotes, getVaultStats } from "./vault";
-import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, removeTrack, setAutoplay, getAutoplay, triggerAutoplayNow, parseArtist, setVolume, getVolume, type Track } from "./music";
+import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, removeTrack, setAutoplay, getAutoplay, triggerAutoplayNow, parseArtist, setVolume, getVolume, isPaused, setOnTrackChange, type Track } from "./music";
 
 // ── Command Definitions ──
 export const commands = [
@@ -625,6 +627,8 @@ async function handlePlay(interaction: ChatInputCommandInteraction): Promise<voi
     return;
   }
 
+
+
   await interaction.deferReply({ flags: ['Ephemeral'] });
 
   try {
@@ -786,6 +790,7 @@ async function handleSkip(interaction: ChatInputCommandInteraction): Promise<voi
   const guildId = interaction.guildId;
   if (!guildId) return;
 
+
   const skipped = skip(guildId);
   if (skipped) {
     await interaction.reply(`**${skipped.title}** 스킵!`);
@@ -799,6 +804,7 @@ async function handleStop(interaction: ChatInputCommandInteraction): Promise<voi
   const guildId = interaction.guildId;
   if (!guildId) return;
 
+
   musicStop(guildId);
   await interaction.reply("음악 정지! 나간다냥 >w<");
 }
@@ -807,6 +813,7 @@ async function handleStop(interaction: ChatInputCommandInteraction): Promise<voi
 async function handlePause(interaction: ChatInputCommandInteraction): Promise<void> {
   const guildId = interaction.guildId;
   if (!guildId) return;
+
 
   const paused = pause(guildId);
   await interaction.reply(paused ? "일시정지 ⏸️" : "재개 ▶️");
@@ -896,11 +903,13 @@ async function handleAutoplay(interaction: ChatInputCommandInteraction): Promise
   }
 
   const genreValue = genre === "artist" ? null : (genre || null);
+  const wasAutoplay = getAutoplay(guildId);
   const enabled = setAutoplay(guildId, genreValue);
 
   if (enabled) {
-    const label = genreValue ? `**${genreValue}** 장르` : "**아티스트 기반**";
-    await interaction.reply(`자동 추천 재생 **켜짐** (${label}) — 3곡 추가 중...`);
+    const label = genreValue ? `**${genreValue}** 장르` : "**현재 곡 기반**";
+    const action = wasAutoplay.enabled ? "변경" : "켜짐";
+    await interaction.reply(`자동 추천 재생 **${action}** (${label}) — 추천곡 추가 중...`);
     triggerAutoplayNow(interaction.guildId!).catch(() => {});
   } else {
     await interaction.reply("먼저 음악을 재생해줘");
@@ -921,6 +930,156 @@ async function handleRemove(interaction: ChatInputCommandInteraction): Promise<v
     await interaction.reply({ content: `${index}번 곡을 찾을 수 없어. \`/queue\`로 확인해봐`, ephemeral: true });
   }
 }
+
+// ── Music Controller (미디어 플레이어 UI) ──
+
+// 길드별 컨트롤러 메시지 추적
+const controllerMessages = new Map<string, { channelId: string; messageId: string }>();
+const JUKEBOX_CHANNEL_NAME = "주크박스";
+
+function buildControllerEmbed(track: Track, paused: boolean, queue: Track[]) {
+  const artist = parseArtist(track.title);
+  const queueCount = queue.length - 1; // 현재 곡 제외
+  const next = queue[1];
+
+  const fields = [];
+  if (artist) fields.push({ name: "아티스트", value: artist, inline: true });
+  fields.push({ name: "길이", value: track.duration, inline: true });
+  fields.push({ name: "요청", value: track.requestedBy, inline: true });
+  if (next) {
+    const nextArtist = parseArtist(next.title);
+    fields.push({ name: "다음 곡", value: `${next.title}${nextArtist ? ` — ${nextArtist}` : ""}`, inline: false });
+  }
+  if (queueCount > 1) {
+    fields.push({ name: "대기열", value: `${queueCount}곡`, inline: true });
+  }
+
+  return {
+    color: paused ? 0x999999 : 0x3182f6,
+    title: paused ? "Paused" : "Now Playing",
+    description: `**[${track.title}](${track.url})**`,
+    fields,
+    thumbnail: track.thumbnail ? { url: track.thumbnail } : undefined,
+  };
+}
+
+function buildControllerButtons(paused: boolean) {
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId("music_prev")
+      .setEmoji("⏮")
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId("music_pause")
+      .setEmoji(paused ? "▶️" : "⏸️")
+      .setStyle(paused ? ButtonStyle.Success : ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId("music_stop")
+      .setEmoji("⏹")
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId("music_skip")
+      .setEmoji("⏭")
+      .setStyle(ButtonStyle.Secondary),
+  );
+}
+
+async function sendOrUpdateController(guildId: string, track: Track | null): Promise<void> {
+  const { client } = await import("./client");
+  const guild = client.guilds.cache.get(guildId);
+  if (!guild) return;
+
+  const channel = guild.channels.cache.find(
+    ch => ch.name === JUKEBOX_CHANNEL_NAME && ch.type === ChannelType.GuildText
+  ) as TextChannel | undefined;
+  if (!channel) return;
+  const channelId = channel.id;
+
+  // 곡 없음 → 컨트롤러 삭제
+  if (!track) {
+    const existing = controllerMessages.get(guildId);
+    if (existing) {
+      try {
+        const msg = await channel.messages.fetch(existing.messageId);
+        await msg.delete();
+      } catch {}
+      controllerMessages.delete(guildId);
+    }
+    return;
+  }
+
+  const paused = isPaused(guildId);
+  const queue = getQueue(guildId);
+  const embed = buildControllerEmbed(track, paused, queue);
+  const row = buildControllerButtons(paused);
+
+  const existing = controllerMessages.get(guildId);
+
+  // 기존 메시지 업데이트 시도
+  if (existing && existing.channelId === channelId) {
+    try {
+      const msg = await channel.messages.fetch(existing.messageId);
+      await msg.edit({ embeds: [embed], components: [row] });
+      return;
+    } catch {
+      // 메시지 삭제됨 → 새로 보내기
+      controllerMessages.delete(guildId);
+    }
+  }
+
+  // 새 컨트롤러 메시지 전송
+  try {
+    const msg = await channel.send({ embeds: [embed], components: [row] });
+    controllerMessages.set(guildId, { channelId, messageId: msg.id });
+  } catch {}
+}
+
+// 버튼 인터랙션 핸들러
+export async function handleMusicButton(interaction: ButtonInteraction): Promise<void> {
+  const guildId = interaction.guildId;
+  if (!guildId) return;
+
+  const current = getNowPlaying(guildId);
+
+  switch (interaction.customId) {
+    case "music_pause": {
+      const paused = pause(guildId);
+      await interaction.deferUpdate();
+      // 버튼 상태 즉시 업데이트
+      if (current) {
+        const queue = getQueue(guildId);
+        const embed = buildControllerEmbed(current, paused, queue);
+        const row = buildControllerButtons(paused);
+        await interaction.editReply({ embeds: [embed], components: [row] });
+      }
+      break;
+    }
+    case "music_skip": {
+      const skipped = skip(guildId);
+      if (skipped) {
+        await interaction.reply({ content: `**${skipped.title}** 스킵!`, ephemeral: true });
+      } else {
+        await interaction.reply({ content: "스킵할 곡이 없어", ephemeral: true });
+      }
+      break;
+    }
+    case "music_stop": {
+      musicStop(guildId);
+      await interaction.reply({ content: "음악 정지! 나간다냥 >w<", ephemeral: true });
+      break;
+    }
+    case "music_prev": {
+      // 이전 곡 기능은 히스토리가 없어서 현재 곡 처음부터 다시 재생
+      await interaction.reply({ content: "이전 곡 기능은 아직 없어... 현재 곡을 다시 들으려면 `/play`로 같은 곡을 검색해줘", ephemeral: true });
+      break;
+    }
+  }
+}
+
+// 트랙 변경 리스너 등록
+setOnTrackChange((guildId, track) => {
+  sendOrUpdateController(guildId, track).catch(() => {});
+});
 
 // ── Autocomplete ──
 export async function handleAutocomplete(interaction: any): Promise<void> {
