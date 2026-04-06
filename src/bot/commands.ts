@@ -13,7 +13,6 @@ import {
   TextInputBuilder,
   TextInputStyle,
   ComponentType,
-  type Message,
 } from "discord.js";
 import { getPresets, setActivePreset, getActivePresetId, getPreset } from "./prompt";
 import { getReply } from "./ai";
@@ -23,7 +22,7 @@ import { getStats as getRagStats } from "./rag";
 import { generateImage, type ImageModel } from "./draw";
 import { generateSpeech, VOICES, type VoiceName } from "./tts";
 import { readUserNote, listUserNotes, getVaultStats } from "./vault";
-import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, removeTrack, setAutoplay, getAutoplay, triggerAutoplayNow, parseArtist, setVolume, getVolume, isPaused, setOnTrackChange, type Track } from "./music";
+import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, removeTrack, setAutoplay, getAutoplay, triggerAutoplayNow, parseArtist, setVolume, getVolume, isPaused, type Track } from "./music";
 
 // ── Command Definitions ──
 export const commands = [
@@ -856,21 +855,12 @@ async function handleNowPlaying(interaction: ChatInputCommandInteraction): Promi
     return;
   }
 
-  const artist = parseArtist(track.title);
-  const fields = [];
-  if (artist) fields.push({ name: "아티스트", value: artist, inline: true });
-  fields.push({ name: "길이", value: track.duration, inline: true });
-  fields.push({ name: "요청", value: track.requestedBy, inline: true });
+  const paused = isPaused(guildId);
+  const queue = getQueue(guildId);
+  const embed = buildControllerEmbed(track, paused, queue);
+  const row = buildControllerButtons(paused);
 
-  const embed = {
-    color: 0x3182f6,
-    title: "Now Playing",
-    description: `**[${track.title}](${track.url})**`,
-    fields,
-    thumbnail: track.thumbnail ? { url: track.thumbnail } : undefined,
-  };
-
-  await interaction.reply({ embeds: [embed] });
+  await interaction.reply({ embeds: [embed], components: [row] });
 }
 
 // ── /volume ──
@@ -898,7 +888,7 @@ async function handleAutoplay(interaction: ChatInputCommandInteraction): Promise
 
   if (genre === "off") {
     setAutoplay(guildId, "off");
-    await interaction.reply("자동 추천 재생 **꺼짐**");
+    await interaction.reply({ content: "자동 추천 재생 **꺼짐**", ephemeral: true });
     return;
   }
 
@@ -909,10 +899,10 @@ async function handleAutoplay(interaction: ChatInputCommandInteraction): Promise
   if (enabled) {
     const label = genreValue ? `**${genreValue}** 장르` : "**현재 곡 기반**";
     const action = wasAutoplay.enabled ? "변경" : "켜짐";
-    await interaction.reply(`자동 추천 재생 **${action}** (${label}) — 추천곡 추가 중...`);
+    await interaction.reply({ content: `자동 추천 재생 **${action}** (${label}) — 추천곡 추가 중...`, ephemeral: true });
     triggerAutoplayNow(interaction.guildId!).catch(() => {});
   } else {
-    await interaction.reply("먼저 음악을 재생해줘");
+    await interaction.reply({ content: "먼저 음악을 재생해줘", ephemeral: true });
   }
 }
 
@@ -933,9 +923,7 @@ async function handleRemove(interaction: ChatInputCommandInteraction): Promise<v
 
 // ── Music Controller (미디어 플레이어 UI) ──
 
-// 길드별 컨트롤러 메시지 추적
-const controllerMessages = new Map<string, { channelId: string; messageId: string }>();
-const JUKEBOX_CHANNEL_NAME = "주크박스";
+// ── Music Controller ──
 
 function buildControllerEmbed(track: Track, paused: boolean, queue: Track[]) {
   const artist = parseArtist(track.title);
@@ -984,56 +972,6 @@ function buildControllerButtons(paused: boolean) {
   );
 }
 
-async function sendOrUpdateController(guildId: string, track: Track | null): Promise<void> {
-  const { client } = await import("./client");
-  const guild = client.guilds.cache.get(guildId);
-  if (!guild) return;
-
-  const channel = guild.channels.cache.find(
-    ch => ch.name === JUKEBOX_CHANNEL_NAME && ch.type === ChannelType.GuildText
-  ) as TextChannel | undefined;
-  if (!channel) return;
-  const channelId = channel.id;
-
-  // 곡 없음 → 컨트롤러 삭제
-  if (!track) {
-    const existing = controllerMessages.get(guildId);
-    if (existing) {
-      try {
-        const msg = await channel.messages.fetch(existing.messageId);
-        await msg.delete();
-      } catch {}
-      controllerMessages.delete(guildId);
-    }
-    return;
-  }
-
-  const paused = isPaused(guildId);
-  const queue = getQueue(guildId);
-  const embed = buildControllerEmbed(track, paused, queue);
-  const row = buildControllerButtons(paused);
-
-  const existing = controllerMessages.get(guildId);
-
-  // 기존 메시지 업데이트 시도
-  if (existing && existing.channelId === channelId) {
-    try {
-      const msg = await channel.messages.fetch(existing.messageId);
-      await msg.edit({ embeds: [embed], components: [row] });
-      return;
-    } catch {
-      // 메시지 삭제됨 → 새로 보내기
-      controllerMessages.delete(guildId);
-    }
-  }
-
-  // 새 컨트롤러 메시지 전송
-  try {
-    const msg = await channel.send({ embeds: [embed], components: [row] });
-    controllerMessages.set(guildId, { channelId, messageId: msg.id });
-  } catch {}
-}
-
 // 버튼 인터랙션 핸들러
 export async function handleMusicButton(interaction: ButtonInteraction): Promise<void> {
   const guildId = interaction.guildId;
@@ -1076,10 +1014,6 @@ export async function handleMusicButton(interaction: ButtonInteraction): Promise
   }
 }
 
-// 트랙 변경 리스너 등록
-setOnTrackChange((guildId, track) => {
-  sendOrUpdateController(guildId, track).catch(() => {});
-});
 
 // ── Autocomplete ──
 export async function handleAutocomplete(interaction: any): Promise<void> {
