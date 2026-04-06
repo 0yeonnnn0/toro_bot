@@ -62,7 +62,7 @@ function getGenAI(): GoogleGenerativeAI {
 }
 
 async function getEmbedding(text: string): Promise<number[]> {
-  const embeddingModel = state.config.embeddingModel || "text-embedding-004";
+  const embeddingModel = state.config.embeddingModel || "gemini-embedding-001";
   const model = getGenAI().getGenerativeModel({ model: embeddingModel });
   const result = await model.embedContent(text);
   return result.embedding.values;
