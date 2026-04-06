@@ -159,6 +159,7 @@ function handleCommand(message: Message): boolean {
 
 // ── AI Judge trigger ──
 async function triggerJudge(channelId: string, message: Message, channelName: string, guildName: string): Promise<void> {
+  console.log(`[JUDGE] channel=${channelName} msgId=${message.id} author=${message.author.displayName}`);
   const cleanContent = message.content.replace(/<@!?\d+>/g, "").trim();
 
   const startTime = Date.now();
@@ -241,7 +242,10 @@ function isDuplicate(messageId: string): boolean {
 // ── Message handler ──
 client.on("messageCreate", async (message: Message) => {
   if (message.author.bot) return;
-  if (isDuplicate(message.id)) return;
+  if (isDuplicate(message.id)) {
+    console.log(`[DEDUP] 중복 메시지 무시: id=${message.id} author=${message.author.displayName}`);
+    return;
+  }
   if (handleCommand(message)) return;
 
   const channelId = message.channel.id;
@@ -252,6 +256,7 @@ client.on("messageCreate", async (message: Message) => {
   const imageData = await extractImage(message);
 
   const isMentioned = message.mentions.has(client.user!);
+  console.log(`[MSG] id=${message.id} mention=${isMentioned} mode=${state.config.replyMode} channel=${channelName} author=${message.author.displayName} content="${cleanContent.slice(0, 30)}"`);
   const shouldLog = isMentioned || state.config.passiveLogging;
 
   history.addMessage(channelId, {
@@ -339,6 +344,7 @@ client.on("messageCreate", async (message: Message) => {
   }
 
   // ── Mentioned: always reply ──
+  console.log(`[MENTION] id=${message.id} channel=${channelName} author=${message.author.displayName}`);
   trackUser(message.author.id, message.author.displayName, true);
   markUserRequest(message.author.id);
 
