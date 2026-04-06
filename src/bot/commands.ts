@@ -896,11 +896,13 @@ async function handleAutoplay(interaction: ChatInputCommandInteraction): Promise
   }
 
   const genreValue = genre === "artist" ? null : (genre || null);
+  const wasAutoplay = getAutoplay(guildId);
   const enabled = setAutoplay(guildId, genreValue);
 
   if (enabled) {
-    const label = genreValue ? `**${genreValue}** 장르` : "**아티스트 기반**";
-    await interaction.reply(`자동 추천 재생 **켜짐** (${label}) — 3곡 추가 중...`);
+    const label = genreValue ? `**${genreValue}** 장르` : "**현재 곡 기반**";
+    const action = wasAutoplay.enabled ? "변경" : "켜짐";
+    await interaction.reply(`자동 추천 재생 **${action}** (${label}) — 추천곡 추가 중...`);
     triggerAutoplayNow(interaction.guildId!).catch(() => {});
   } else {
     await interaction.reply("먼저 음악을 재생해줘");
