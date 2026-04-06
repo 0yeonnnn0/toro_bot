@@ -760,8 +760,7 @@ async function showSearchPage(
       const track = allResults[idx];
       const position = await playTrackDirect(voiceChannel, track);
 
-      await btnInteraction.update({ content: "선택 완료", embeds: [], components: [] });
-      await interaction.followUp({ embeds: [makePlayEmbed(track, position)], components: [buildControllerButtons(false)] });
+      await btnInteraction.update({ content: null, embeds: [makePlayEmbed(track, position)], components: [buildControllerButtons(false)] });
     }
   } catch {
     await interaction.editReply({ embeds: [embed], components: [] }).catch(() => {});
