@@ -166,7 +166,10 @@ async function triggerJudge(channelId: string, message: Message, channelName: st
     let ragHitCount = 0;
     const reply = await enqueue(async () => {
       const channelHistory = history.getHistory(channelId);
-      const ragResults = await rag.searchRelevant(cleanContent);
+      let ragResults: any[] = [];
+      try {
+        ragResults = await rag.searchRelevant(cleanContent);
+      } catch {}
       ragHitCount = ragResults.length;
       const urlContext = await fetchUrlContext(cleanContent);
       const vaultContext = getUserContext(message.author.displayName);
@@ -362,7 +365,10 @@ client.on("messageCreate", async (message: Message) => {
     let ragHitCount = 0;
     const reply = await enqueue(async () => {
       const channelHistory = history.getHistory(channelId);
-      const ragResults = await rag.searchRelevant(cleanContent);
+      let ragResults: any[] = [];
+      try {
+        ragResults = await rag.searchRelevant(cleanContent);
+      } catch {}
       ragHitCount = ragResults.length;
       const urlContext = await fetchUrlContext(cleanContent);
       const vaultContext = getUserContext(message.author.displayName);
@@ -425,7 +431,11 @@ client.on("messageCreate", async (message: Message) => {
       model: null,
     });
 
-    await sendReply("뭔가 고장났다냥... @д@").catch(() => {});
+    const errorMsg = isRateLimit
+      ? "오늘은 너무 많이 떠들었다냥... 내일 다시 돌아온다냥! >w<"
+      : "뭔가 고장났다냥... @д@";
+
+    await sendReply(errorMsg).catch(() => {});
   }
 });
 
