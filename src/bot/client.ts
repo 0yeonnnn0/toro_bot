@@ -200,6 +200,7 @@ async function triggerJudge(channelId: string, message: Message, channelName: st
     markUserRequest(message.author.id);
 
     const resolvedReply = resolveMentions(reply, message);
+    console.log(`[REPLY:JUDGE] msgId=${message.id} channel=${channelName} sending judge reply`);
     await message.reply(resolvedReply);
     history.addMessage(channelId, { role: "assistant", content: reply });
     state.stats.repliesSent++;
@@ -355,24 +356,34 @@ client.on("messageCreate", async (message: Message) => {
   const queueDelay = setTimeout(async () => {
     if (waitingCancelled) return;
     waitingSending = true;
+    console.log(`[REPLY:WAIT] id=${message.id} sending waiting message`);
     try {
       const msg = await message.reply("잠시 기다려달라냥... 0w0");
       if (waitingCancelled) {
+        console.log(`[REPLY:WAIT] id=${message.id} cancelled, deleting waiting message`);
         await msg.delete().catch(() => {});
       } else {
         waitingMsg = msg;
+        console.log(`[REPLY:WAIT] id=${message.id} waiting message set`);
       }
-    } catch {}
+    } catch (e) {
+      console.log(`[REPLY:WAIT] id=${message.id} failed: ${(e as Error).message}`);
+    }
     waitingSending = false;
   }, 2000);
 
   async function sendReply(text: string): Promise<void> {
     clearTimeout(queueDelay);
     waitingCancelled = true;
-    if (waitingSending) await new Promise(r => setTimeout(r, 500));
+    if (waitingSending) {
+      console.log(`[REPLY:SEND] id=${message.id} waitingSending=true, waiting 500ms`);
+      await new Promise(r => setTimeout(r, 500));
+    }
     if (waitingMsg) {
+      console.log(`[REPLY:SEND] id=${message.id} editing waitingMsg`);
       await waitingMsg.edit(text);
     } else {
+      console.log(`[REPLY:SEND] id=${message.id} new message.reply`);
       await message.reply(text);
     }
   }
@@ -404,6 +415,7 @@ client.on("messageCreate", async (message: Message) => {
     }
 
     const resolved = resolveMentions(reply, message);
+    console.log(`[REPLY:SUCCESS] id=${message.id} sending reply`);
     await sendReply(resolved);
     history.addMessage(channelId, { role: "assistant", content: reply });
     state.stats.repliesSent++;
@@ -453,6 +465,7 @@ client.on("messageCreate", async (message: Message) => {
       ? "오늘은 너무 많이 떠들었다냥... 내일 다시 돌아온다냥! >w<"
       : "뭔가 고장났다냥... @д@";
 
+    console.log(`[REPLY:ERROR] id=${message.id} sending error reply`);
     await sendReply(errorMsg).catch(() => {});
   }
 });
