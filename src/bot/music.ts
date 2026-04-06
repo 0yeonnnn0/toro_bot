@@ -38,6 +38,8 @@ interface GuildQueue {
   artistHistory: Map<string, number>;
   volume: number; // 0.0 ~ 1.0
   currentResource: import("@discordjs/voice").AudioResource | null;
+  history: Track[]; // 이전 곡 스택
+  skipToHistory: boolean; // prev 호출 시 Idle에서 history push 방지
 }
 
 // ── State ──
@@ -65,6 +67,18 @@ export function skip(guildId: string): Track | null {
   const skipped = queue.tracks[0];
   queue.player.stop(true); // Idle 이벤트가 shift + 다음 곡 재생 트리거
   return skipped;
+}
+
+export function prev(guildId: string): Track | null {
+  const queue = queues.get(guildId);
+  if (!queue || queue.history.length === 0) return null;
+  const previous = queue.history.pop()!;
+  // [current, next1, ...] → [previous, current, next1, ...]
+  queue.tracks.unshift(previous);
+  // Idle에서 shift하지 않도록 플래그 → tracks 그대로 유지 → playNext(previous)
+  queue.skipToHistory = true;
+  queue.player.stop(true);
+  return previous;
 }
 
 export function stop(guildId: string): void {
@@ -293,14 +307,26 @@ export async function playTrackDirect(
       artistHistory: new Map(),
       volume: 0.3,
       currentResource: null,
+      history: [],
+      skipToHistory: false,
     };
     queues.set(channel.guild.id, queue);
 
     player.on(AudioPlayerStatus.Idle, () => {
       const q = queues.get(channel.guild.id);
       if (!q) return;
+      if (q.skipToHistory) {
+        // prev() 호출 — shift 안 하고 바로 playNext (tracks 앞에 이전 곡이 있음)
+        q.skipToHistory = false;
+        if (q.tracks.length > 0) {
+          playNext(channel.guild.id);
+        }
+        return;
+      }
       const finished = q.tracks.shift();
       if (finished) {
+        q.history.push(finished);
+        if (q.history.length > 50) q.history.shift();
         q.playedUrls.add(finished.url);
         q.playedTitles.add(normTitle(finished.title));
         const artist = parseArtist(finished.title);

@@ -22,7 +22,7 @@ import { getStats as getRagStats } from "./rag";
 import { generateImage, type ImageModel } from "./draw";
 import { generateSpeech, VOICES, type VoiceName } from "./tts";
 import { readUserNote, listUserNotes, getVaultStats } from "./vault";
-import { playTrack, playTrackDirect, searchTracks, skip, stop as musicStop, pause, getQueue, getNowPlaying, removeTrack, setAutoplay, getAutoplay, triggerAutoplayNow, parseArtist, setVolume, getVolume, isPaused, type Track } from "./music";
+import { playTrack, playTrackDirect, searchTracks, skip, prev, stop as musicStop, pause, getQueue, getNowPlaying, removeTrack, setAutoplay, getAutoplay, triggerAutoplayNow, parseArtist, setVolume, getVolume, isPaused, type Track } from "./music";
 
 // ── Command Definitions ──
 export const commands = [
@@ -760,8 +760,7 @@ async function showSearchPage(
       const track = allResults[idx];
       const position = await playTrackDirect(voiceChannel, track);
 
-      await btnInteraction.update({ content: "선택 완료", embeds: [], components: [] });
-      await interaction.followUp({ embeds: [makePlayEmbed(track, position)], components: [buildControllerButtons(false)] });
+      await btnInteraction.update({ content: null, embeds: [makePlayEmbed(track, position)], components: [buildControllerButtons(false)] });
     }
   } catch {
     await interaction.editReply({ embeds: [embed], components: [] }).catch(() => {});
@@ -1025,8 +1024,12 @@ export async function handleMusicButton(interaction: ButtonInteraction): Promise
       break;
     }
     case "music_prev": {
-      // 이전 곡 기능은 히스토리가 없어서 현재 곡 처음부터 다시 재생
-      await interaction.reply({ content: "이전 곡 기능은 아직 없어... 현재 곡을 다시 들으려면 `/play`로 같은 곡을 검색해줘", ephemeral: true });
+      const previous = prev(guildId);
+      if (previous) {
+        await interaction.reply({ content: `**${previous.title}** 이전 곡!`, ephemeral: true });
+      } else {
+        await interaction.reply({ content: "이전 곡이 없어", ephemeral: true });
+      }
       break;
     }
   }
