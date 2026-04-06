@@ -876,7 +876,7 @@ async function handleVolume(interaction: ChatInputCommandInteraction): Promise<v
   }
 
   const result = setVolume(guildId, level / 100);
-  await interaction.reply(`볼륨: **${result}%** — 다음 곡부터 적용`);
+  await interaction.reply(`볼륨: **${result}%**`);
 }
 
 // ── /autoplay ──
