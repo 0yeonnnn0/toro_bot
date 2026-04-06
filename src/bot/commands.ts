@@ -901,6 +901,24 @@ async function handleAutoplay(interaction: ChatInputCommandInteraction): Promise
     const action = wasAutoplay.enabled ? "변경" : "켜짐";
     await interaction.reply({ content: `자동 추천 재생 **${action}** (${label}) — 추천곡 추가 중...`, ephemeral: true });
     triggerAutoplayNow(interaction.guildId!).catch(() => {});
+  } else if (genreValue) {
+    // 큐 없음 + 장르 지정 → 해당 장르로 첫 곡 검색 후 바로 재생
+    const member = interaction.guild?.members.cache.get(interaction.user.id);
+    const voiceChannel = member?.voice.channel;
+    if (!voiceChannel) {
+      await interaction.reply({ content: "먼저 음성 채널에 들어가", ephemeral: true });
+      return;
+    }
+    await interaction.deferReply();
+    const tracks = await searchTracks(`${genreValue} music`, interaction.user.displayName, 1);
+    if (tracks.length === 0) {
+      await interaction.editReply("검색 결과가 없어...");
+      return;
+    }
+    await playTrackDirect(voiceChannel, tracks[0]);
+    setAutoplay(guildId, genreValue);
+    triggerAutoplayNow(guildId).catch(() => {});
+    await interaction.editReply(`**${genreValue}** 자동 재생 시작!`);
   } else {
     await interaction.reply({ content: "먼저 음악을 재생해줘", ephemeral: true });
   }
