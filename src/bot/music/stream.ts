@@ -4,7 +4,7 @@ import { PassThrough } from "stream";
 
 /**
  * yt-dlp + FFmpeg 파이프라인으로 오디오 스트림 생성
- * URL → yt-dlp(bestaudio) → FFmpeg(PCM s16le) → 프리버퍼 → AudioResource
+ * URL → yt-dlp(bestaudio) → FFmpeg(PCM s16le) → PassThrough → AudioResource
  */
 export function createAudioStream(url: string, volume: number): AudioResource {
   const ytdlp = spawn("yt-dlp", [
@@ -44,37 +44,15 @@ export function createAudioStream(url: string, volume: number): AudioResource {
   ytdlp.stderr.on("data", (d) => console.error("yt-dlp:", d.toString().trim()));
   ffmpeg.stderr.on("data", (d) => console.error("ffmpeg:", d.toString().trim()));
 
-  // 프리버퍼: 192KB (약 1초 분량의 PCM) 쌓인 후 재생 시작
-  const PRE_BUFFER_SIZE = 192 * 1024;
-  const preBuffer: Buffer[] = [];
-  let preBufferBytes = 0;
-  let flushed = false;
-  const output = new PassThrough({ highWaterMark: 512 * 1024 });
+  // 프리버퍼 제거 — PassThrough 1MB highWaterMark + discord.js 50패킷 버퍼로 안정화
+  const output = new PassThrough({ highWaterMark: 1024 * 1024 });
+  ffmpeg.stdout.pipe(output);
 
-  ffmpeg.stdout.on("data", (chunk: Buffer) => {
-    if (flushed) {
-      output.write(chunk);
-      return;
-    }
-    preBuffer.push(chunk);
-    preBufferBytes += chunk.length;
-    if (preBufferBytes >= PRE_BUFFER_SIZE) {
-      flushed = true;
-      for (const buf of preBuffer) output.write(buf);
-      preBuffer.length = 0;
-    }
+  const resource = createAudioResource(output, {
+    inputType: StreamType.Raw,
+    inlineVolume: true,
+    silencePaddingFrames: 5,
   });
-  ffmpeg.stdout.on("end", () => {
-    // 프리버퍼 못 채운 짧은 곡 — 있는 만큼 flush
-    if (!flushed) {
-      for (const buf of preBuffer) output.write(buf);
-      preBuffer.length = 0;
-    }
-    output.end();
-  });
-  ffmpeg.stdout.on("error", (err) => output.destroy(err));
-
-  const resource = createAudioResource(output, { inputType: StreamType.Raw, inlineVolume: true });
   resource.volume?.setVolume(volume);
   return resource;
 }
