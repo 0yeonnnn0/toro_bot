@@ -300,14 +300,17 @@ export function setupMessageHandler(client: Client): void {
       if (waitingMsgPromise) {
         // 대기 메시지가 전송 중이거나 완료됨 → 기다린 후 수정
         try {
+          console.log(`[SEND] id=${message.id} awaiting waitingMsgPromise...`);
           const msg = await waitingMsgPromise;
+          console.log(`[SEND] id=${message.id} editing waiting message`);
           await msg.edit(text);
-        } catch {
-          // 대기 메시지 전송 실패 시 새 메시지로
+          console.log(`[SEND] id=${message.id} edit done`);
+        } catch (e) {
+          console.error(`[SEND] id=${message.id} edit failed: ${(e as Error).message}, sending new reply`);
           await message.reply(text);
         }
       } else {
-        // 2초 안에 응답 완료 → 바로 전송
+        console.log(`[SEND] id=${message.id} no waiting message, sending new reply`);
         await message.reply(text);
       }
     }
