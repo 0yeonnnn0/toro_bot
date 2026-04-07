@@ -10,7 +10,7 @@ import {
 } from "@discordjs/voice";
 import type { VoiceBasedChannel } from "discord.js";
 import { addMusicLog } from "../../dashboard/music-logs";
-import { parseArtist, normTitle, LEAVE_TIMEOUT } from "./utils";
+import { parseArtist, normTitle, parseDurationStr, LEAVE_TIMEOUT } from "./utils";
 import { searchTracks } from "./search";
 import { autoplayNext } from "./autoplay";
 import { downloadAudio, createAudioStreamFromFile, cleanupFile } from "./stream";
@@ -361,6 +361,25 @@ export async function playNext(guildId: string): Promise<void> {
 
     // 다음 곡 프리페치
     prefetchNext(guildId);
+
+    // 곡 끝나기 10초 전에 autoplay 트리거 + 다음 곡 프리페치
+    const totalSec = parseDurationStr(track.duration);
+    if (totalSec > 15) {
+      setTimeout(() => {
+        const q = queues.get(guildId);
+        if (!q || !q.playing) return;
+        // autoplay 곡 추가
+        if (q.autoplay && q.tracks.length <= 2) {
+          const current = q.tracks[0];
+          if (current) {
+            console.log(`[PREFETCH] 곡 끝나기 10초 전 — autoplay + 프리페치 시작`);
+            autoplayNext(guildId, current).then(() => prefetchNext(guildId)).catch(() => {});
+          }
+        } else {
+          prefetchNext(guildId);
+        }
+      }, (totalSec - 10) * 1000);
+    }
 
   } catch (err) {
     console.error("재생 실패:", (err as Error).message);
