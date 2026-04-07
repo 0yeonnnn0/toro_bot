@@ -408,16 +408,10 @@ export function setupMessageHandler(client: Client): void {
       });
 
       console.error(`[MENTION:CATCH] id=${message.id} replySent=${replySent} error="${(err as Error).message}"`);
-      // 이미 정상 응답을 보냈으면 에러 메시지 중복 전송 방지
-      if (!replySent) {
-        const errorMsg = isRateLimit
-          ? "오늘은 너무 많이 떠들었다냥... 내일 다시 돌아온다냥! >w<"
-          : "뭔가 고장났다냥... @д@ [MH]";
-
-        console.log(`[REPLY:ERROR] id=${message.id} sending error reply`);
-        await sendReply(errorMsg).catch(() => {});
-      } else {
-        console.error(`[REPLY:POST_ERROR] id=${message.id} 응답 후 후처리 에러:`, (err as Error).message);
+      // 에러 시 Discord에 에러 메시지를 보내지 않음 — 정상 응답이 별도로 도착하는 경우가 있어 중복 방지
+      // 레이트 리밋일 때만 유저에게 알림
+      if (!replySent && isRateLimit) {
+        await sendReply("오늘은 너무 많이 떠들었다냥... 내일 다시 돌아온다냥! >w<").catch(() => {});
       }
     }
   });
