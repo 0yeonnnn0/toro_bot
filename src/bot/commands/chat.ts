@@ -15,7 +15,7 @@ export async function handleQuestion(interaction: ChatInputCommandInteraction): 
     await interaction.editReply(
       isRateLimit
         ? "오늘은 너무 많이 떠들었다냥... 내일 다시 돌아온다냥! >w<"
-        : "뭔가 고장났다냥... @д@"
+        : "뭔가 고장났다냥... @д@ [CH]"
     );
   }
 }

@@ -26,7 +26,7 @@ export async function handleDraw(interaction: ChatInputCommandInteraction): Prom
     if (msg.includes("429") || msg.includes("quota")) {
       await interaction.editReply("오늘은 그림을 너무 많이 그렸다냥... 내일 다시 오라냥! >w<");
     } else {
-      await interaction.editReply("그림 그리다 뭔가 고장났다냥... @д@\n" + msg);
+      await interaction.editReply("그림 그리다 뭔가 고장났다냥... @д@ [MD]\n" + msg);
     }
   }
 }

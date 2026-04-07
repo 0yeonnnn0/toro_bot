@@ -402,7 +402,7 @@ export function setupMessageHandler(client: Client): void {
       if (!replySent) {
         const errorMsg = isRateLimit
           ? "오늘은 너무 많이 떠들었다냥... 내일 다시 돌아온다냥! >w<"
-          : "뭔가 고장났다냥... @д@";
+          : "뭔가 고장났다냥... @д@ [MH]";
 
         console.log(`[REPLY:ERROR] id=${message.id} sending error reply`);
         await sendReply(errorMsg).catch(() => {});
