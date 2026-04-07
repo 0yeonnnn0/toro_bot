@@ -219,19 +219,22 @@ export function setupMessageHandler(client: Client): void {
         });
       }
 
-      addLog({
-        guild: guildName,
-        channel: channelName,
-        author: message.author.displayName,
-        content: cleanContent,
-        botReplied: false,
-        triggerReason: null,
-        botReply: null,
-        responseTime: null,
-        ragHits: 0,
-        error: null,
-        model: null,
-      });
+      // 멘션은 멘션 핸들러에서 로그를 남기므로 여기서는 비멘션만 기록
+      if (!isMentioned) {
+        addLog({
+          guild: guildName,
+          channel: channelName,
+          author: message.author.displayName,
+          content: cleanContent,
+          botReplied: false,
+          triggerReason: null,
+          botReply: null,
+          responseTime: null,
+          ragHits: 0,
+          error: null,
+          model: null,
+        });
+      }
     }
 
     // Mentioned → always reply. Otherwise → mode-based auto-participation.
