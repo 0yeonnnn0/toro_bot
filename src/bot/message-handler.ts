@@ -57,6 +57,8 @@ const autoCooldowns = new Map<string, ReturnType<typeof setTimeout>>();
 // ── Message deduplication ──
 const recentMessages = new Set<string>();
 const DEDUP_TTL = 10_000; // 10s
+// 멘션 메시지 처리 중 추적 (동시 실행 방지)
+const processingMentions = new Set<string>();
 
 function isDuplicate(messageId: string): boolean {
   if (recentMessages.has(messageId)) return true;
@@ -284,6 +286,13 @@ export function setupMessageHandler(client: Client): void {
     }
 
     // ── Mentioned: always reply ──
+    if (processingMentions.has(message.id)) {
+      console.error(`[MENTION:DUPLICATE] id=${message.id} 이미 처리 중! 스킵`);
+      return;
+    }
+    processingMentions.add(message.id);
+    setTimeout(() => processingMentions.delete(message.id), 60_000);
+
     console.log(`[MENTION] id=${message.id} channel=${channelName} author=${message.author.displayName}`);
     trackUser(message.author.id, message.author.displayName, true);
     markUserRequest(message.author.id);
@@ -374,6 +383,7 @@ export function setupMessageHandler(client: Client): void {
         model: lastUsedModel,
       });
     } catch (err) {
+      console.error(`[MENTION:CATCH:ENTRY] id=${message.id} replySent=${replySent} error="${(err as Error).message?.slice(0, 100)}"`);
       const responseTime = Date.now() - startTime;
       const isRateLimit = (err as Error).message?.includes("429") || (err as Error).message?.includes("quota");
 
