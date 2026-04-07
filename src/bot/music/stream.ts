@@ -13,27 +13,33 @@ export function createAudioStream(url: string, volume: number): AudioResource {
     "--no-warnings",
     "--quiet",
     "--no-part",
-    "--buffer-size", "1M",
-    "--retries", "3",
-    "--fragment-retries", "3",
+    "--buffer-size", "2M",
+    "--http-chunk-size", "2M",
+    "--retries", "5",
+    "--fragment-retries", "5",
+    "--throttled-rate", "100K",
     url,
   ]);
 
   const ffmpeg = spawn("ffmpeg", [
     "-thread_queue_size", "8192",
+    "-reconnect", "1",
+    "-reconnect_streamed", "1",
     "-i", "pipe:0",
     "-analyzeduration", "0",
     "-probesize", "500000",
     "-loglevel", "0",
-    "-f", "s16le",
+    "-f", "opus",
+    "-acodec", "libopus",
     "-ar", "48000",
     "-ac", "2",
+    "-b:a", "128k",
     "pipe:1",
   ]);
 
   ytdlp.stdout.pipe(ffmpeg.stdin);
 
-  // EPIPE 에러 방지 — 한쪽이 먼저 닫혀도 크래시 안 나도록
+  // EPIPE 에러 방지
   ytdlp.stdin?.on("error", () => {});
   ytdlp.stdout.on("error", () => {});
   ffmpeg.stdin.on("error", () => {});
@@ -44,12 +50,11 @@ export function createAudioStream(url: string, volume: number): AudioResource {
   ytdlp.stderr.on("data", (d) => console.error("yt-dlp:", d.toString().trim()));
   ffmpeg.stderr.on("data", (d) => console.error("ffmpeg:", d.toString().trim()));
 
-  // 프리버퍼 제거 — PassThrough 1MB highWaterMark + discord.js 50패킷 버퍼로 안정화
-  const output = new PassThrough({ highWaterMark: 1024 * 1024 });
+  const output = new PassThrough({ highWaterMark: 2 * 1024 * 1024 });
   ffmpeg.stdout.pipe(output);
 
   const resource = createAudioResource(output, {
-    inputType: StreamType.Raw,
+    inputType: StreamType.OggOpus,
     inlineVolume: true,
     silencePaddingFrames: 5,
   });
