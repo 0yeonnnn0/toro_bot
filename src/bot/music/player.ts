@@ -13,7 +13,7 @@ import { addMusicLog } from "../../dashboard/music-logs";
 import { parseArtist, normTitle, LEAVE_TIMEOUT } from "./utils";
 import { searchTracks } from "./search";
 import { autoplayNext } from "./autoplay";
-import { createAudioStream } from "./stream";
+import { downloadAudio, createAudioStreamFromFile, cleanupFile } from "./stream";
 
 // ── Activity callback (순환 의존성 해결) ──
 let onActivityChange: ((title: string | null) => void) | null = null;
@@ -52,12 +52,29 @@ export interface GuildQueue {
   artistHistory: Map<string, number>;
   volume: number; // 0.0 ~ 1.0
   currentResource: import("@discordjs/voice").AudioResource | null;
+  currentFile: string | null; // 현재 재생 중인 임시 파일
   history: Track[]; // 이전 곡 스택
   skipToHistory: boolean; // prev 호출 시 Idle에서 history push 방지
 }
 
 // ── State ──
 export const queues = new Map<string, GuildQueue>();
+
+// 프리페치 캐시: URL → 다운로드된 파일 경로
+const prefetchCache = new Map<string, Promise<string>>();
+
+function prefetchNext(guildId: string): void {
+  const queue = queues.get(guildId);
+  if (!queue || queue.tracks.length <= 1) return;
+  const nextTrack = queue.tracks[1];
+  if (prefetchCache.has(nextTrack.url)) return;
+  console.log(`[PREFETCH] ${nextTrack.title}`);
+  prefetchCache.set(nextTrack.url, downloadAudio(nextTrack.url).catch((err) => {
+    console.error(`[PREFETCH] 실패: ${(err as Error).message}`);
+    prefetchCache.delete(nextTrack.url);
+    return "";
+  }));
+}
 
 // ── Public API ──
 
@@ -221,6 +238,7 @@ export async function playTrackDirect(
       currentResource: null,
       history: [],
       skipToHistory: false,
+      currentFile: null,
     };
     queues.set(channel.guild.id, queue);
 
@@ -306,8 +324,28 @@ export async function playNext(guildId: string): Promise<void> {
 
   const track = queue.tracks[0];
 
+  // 이전 곡 임시 파일 정리
+  if (queue.currentFile) {
+    cleanupFile(queue.currentFile);
+    queue.currentFile = null;
+  }
+
   try {
-    const resource = createAudioStream(track.url, queue.volume);
+    // 프리페치 캐시에 있으면 사용, 없으면 새로 다운로드
+    let filePath: string;
+    const cached = prefetchCache.get(track.url);
+    if (cached) {
+      prefetchCache.delete(track.url);
+      filePath = await cached;
+      if (!filePath) throw new Error("프리페치 실패, 재다운로드");
+      console.log(`[PLAY] 프리페치 캐시 사용: ${track.title}`);
+    } else {
+      console.log(`[PLAY] 다운로드 시작: ${track.title}`);
+      filePath = await downloadAudio(track.url);
+    }
+
+    queue.currentFile = filePath;
+    const resource = createAudioStreamFromFile(filePath, queue.volume);
     queue.currentResource = resource;
     queue.player.play(resource);
     queue.playing = true;
@@ -321,14 +359,16 @@ export async function playNext(guildId: string): Promise<void> {
       requestedBy: track.requestedBy,
     });
 
+    // 다음 곡 프리페치
+    prefetchNext(guildId);
+
   } catch (err) {
-    console.error("스트림 생성 실패:", (err as Error).message);
+    console.error("재생 실패:", (err as Error).message);
     queue.tracks.shift();
     if (queue.tracks.length > 0) {
       playNext(guildId);
     } else {
       queue.playing = false;
-
     }
   }
 }
@@ -337,6 +377,7 @@ export function disconnect(guildId: string): void {
   const queue = queues.get(guildId);
   if (queue) {
     if (queue.leaveTimer) clearTimeout(queue.leaveTimer);
+    if (queue.currentFile) cleanupFile(queue.currentFile);
     queue.player.stop();
     queue.connection.destroy();
     queues.delete(guildId);
