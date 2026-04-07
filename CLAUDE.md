@@ -53,7 +53,7 @@ gh pr create --base develop        # develop으로 PR
 - `src/bot/commands.ts` — slash command definitions and handlers (`/ask`, `/mode`, `/draw`, `/say`, `/summary`, `/reply`, `/mute`, `/내정보`, `/status`)
 - `src/bot/prompt.ts` — preset system; loads/saves presets from `data/presets.json`; builds system prompt with owner/user suffix based on `OWNER_ID`
 - `src/bot/history.ts` — per-channel message history (max 30), in-memory only
-- `src/bot/rag.ts` — vector search via vectra + Google `text-embedding-004`; stores conversation chunks, searches relevant context
+- `src/bot/rag.ts` — vector search via vectra + Google `gemini-embedding-001`; stores conversation chunks, searches relevant context
 - `src/bot/vault.ts` — Obsidian vault integration; reads/writes user `.md` notes in `VAULT_PATH/TORO/users/`; AI-driven info extraction from conversations with `[[Obsidian links]]` for keywords
 - `src/bot/draw.ts` — Gemini image generation (flash/pro)
 - `src/bot/tts.ts` — Google TTS with 6 voice options
@@ -133,7 +133,7 @@ Discord message → client.ts
 
 ### RAG pipeline
 
-- Conversations buffered per-channel (5 messages) → embedded via `text-embedding-004` → stored in vectra index
+- Conversations buffered per-channel (5 messages) → embedded via `gemini-embedding-001` → stored in vectra index
 - On reply, query vector search (top 3, score > 0.5) → formatted as XML `<past_conversation>` context
 - Hit counts tracked in `data/rag-hits.json` for analytics
 
@@ -197,7 +197,7 @@ Discord message → client.ts
 
 ## Open questions
 
-- Embedding model: `text-embedding-004` vs `gemini-embedding-001` — need to verify which works with current API key
+- Embedding model: `gemini-embedding-001` 사용 중 (`text-embedding-004`는 deprecated)
 - iOS vault sync: Remotely Save + WebDAV failed; using iCloud ↔ Mac ↔ Syncthing ↔ NAS relay (requires Mac to be on)
 - Consider daily conversation summary notes in `TORO/daily/` for long-term memory
 - Consider user relationship mapping for richer social context

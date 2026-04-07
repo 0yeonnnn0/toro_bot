@@ -101,7 +101,7 @@
 | Frontend | React 19 + Vite + next-themes |
 | Discord | discord.js v14 |
 | AI | Google Gemini / OpenAI GPT / Anthropic Claude |
-| 벡터 검색 | Vectra (text-embedding-004) |
+| 벡터 검색 | Vectra (gemini-embedding-001) |
 | 음악 | @discordjs/voice + yt-dlp + FFmpeg |
 | 유저 기억 | Obsidian 볼트 (.md 파일) |
 | 배포 | Docker + Watchtower (자동 업데이트) |

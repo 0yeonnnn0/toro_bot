@@ -110,7 +110,11 @@ export const state: State = {
     webSystemPrompt: saved?.config?.webSystemPrompt ?? "",
     imageRecognition: saved?.config?.imageRecognition ?? true,
     passiveLogging: saved?.config?.passiveLogging ?? true,
-    embeddingModel: saved?.config?.embeddingModel ?? "gemini-embedding-001",
+    embeddingModel: (() => {
+      const m = saved?.config?.embeddingModel;
+      if (!m || m === "text-embedding-004") return "gemini-embedding-001";
+      return m;
+    })(),
     googleApiKey: saved?.config?.googleApiKey ?? (process.env.GOOGLE_API_KEY || ""),
     openaiApiKey: saved?.config?.openaiApiKey ?? (process.env.OPENAI_API_KEY || ""),
     anthropicApiKey: saved?.config?.anthropicApiKey ?? (process.env.ANTHROPIC_API_KEY || ""),
