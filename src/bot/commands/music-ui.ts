@@ -174,11 +174,12 @@ export async function showSearchPage(
 
     } else {
       // 번호 선택
+      await btnInteraction.deferUpdate();
       const idx = parseInt(btnInteraction.customId.split("_")[1]);
       const track = allResults[idx];
       const position = await playTrackDirect(voiceChannel, track);
 
-      await btnInteraction.update({ content: null, embeds: [makePlayEmbed(track, position)], components: [buildControllerButtons(false)] });
+      await btnInteraction.editReply({ content: null, embeds: [makePlayEmbed(track, position)], components: [buildControllerButtons(false)] });
     }
   } catch {
     await interaction.editReply({ embeds: [embed], components: [] }).catch(() => {});
