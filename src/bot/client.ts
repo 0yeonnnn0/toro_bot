@@ -86,6 +86,14 @@ client.on("warn", (msg) => addEvent("discord_warn", msg));
 // 메시지 핸들러 등록
 setupMessageHandler(client);
 
+// ── DEBUG: 모든 봇 메시지 전송 추적 ──
+client.on("messageCreate", (msg) => {
+  if (msg.author.id === client.user?.id) {
+    const ref = msg.reference?.messageId || "none";
+    console.log(`[BOT:SENT] content="${msg.content.slice(0, 60)}" replyTo=${ref} channel=${(msg.channel as any).name || msg.channel.id}`);
+  }
+});
+
 export async function start(): Promise<void> {
   addEvent("bot_start", "봇 프로세스 시작");
   await client.login(process.env.DISCORD_TOKEN);
