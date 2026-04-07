@@ -168,7 +168,15 @@ async function triggerJudge(channelId: string, message: Message, channelName: st
 }
 
 // ── Setup ──
+let handlerRegistered = false;
 export function setupMessageHandler(client: Client): void {
+  if (handlerRegistered) {
+    console.error(`[WARN] setupMessageHandler가 2번 호출됨! 중복 등록 방지.`);
+    return;
+  }
+  handlerRegistered = true;
+  console.log(`[INIT] messageCreate 핸들러 등록, 기존 리스너 수: ${client.listenerCount("messageCreate")}`);
+
   client.on("messageCreate", async (message: Message) => {
     if (message.author.bot) return;
     if (isDuplicate(message.id)) {
@@ -318,6 +326,7 @@ export function setupMessageHandler(client: Client): void {
 
     const startTime = Date.now();
     let replySent = false;
+    console.log(`[MENTION:START] id=${message.id} timestamp=${startTime}`);
 
     try {
       let ragHitCount = 0;
@@ -344,9 +353,10 @@ export function setupMessageHandler(client: Client): void {
       }
 
       const resolved = resolveMentions(reply, message);
-      console.log(`[REPLY:SUCCESS] id=${message.id} sending reply`);
+      console.log(`[MENTION:REPLY] id=${message.id} replySent=${replySent} reply="${resolved.slice(0, 50)}"`);
       await sendReply(resolved);
       replySent = true;
+      console.log(`[MENTION:SENT] id=${message.id} replySent=true`);
       history.addMessage(channelId, { role: "assistant", content: reply });
       state.stats.repliesSent++;
 
@@ -391,6 +401,7 @@ export function setupMessageHandler(client: Client): void {
         model: null,
       });
 
+      console.error(`[MENTION:CATCH] id=${message.id} replySent=${replySent} error="${(err as Error).message}"`);
       // 이미 정상 응답을 보냈으면 에러 메시지 중복 전송 방지
       if (!replySent) {
         const errorMsg = isRateLimit
