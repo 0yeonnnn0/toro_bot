@@ -285,41 +285,29 @@ export function setupMessageHandler(client: Client): void {
     trackUser(message.author.id, message.author.displayName, true);
     markUserRequest(message.author.id);
 
-    let waitingMsg: Message<boolean> | null = null;
     let waitingCancelled = false;
-    let waitingSending = false;
+    let waitingMsgPromise: Promise<Message<boolean>> | null = null;
 
-    const queueDelay = setTimeout(async () => {
+    const queueDelay = setTimeout(() => {
       if (waitingCancelled) return;
-      waitingSending = true;
-      console.log(`[REPLY:WAIT] id=${message.id} sending waiting message`);
-      try {
-        const msg = await message.reply("잠시 기다려달라냥... 0w0");
-        if (waitingCancelled) {
-          console.log(`[REPLY:WAIT] id=${message.id} cancelled, deleting waiting message`);
-          await msg.delete().catch(() => {});
-        } else {
-          waitingMsg = msg;
-          console.log(`[REPLY:WAIT] id=${message.id} waiting message set`);
-        }
-      } catch (e) {
-        console.log(`[REPLY:WAIT] id=${message.id} failed: ${(e as Error).message}`);
-      }
-      waitingSending = false;
+      waitingMsgPromise = message.reply("잠시 기다려달라냥... 0w0");
     }, 2000);
 
     async function sendReply(text: string): Promise<void> {
       clearTimeout(queueDelay);
       waitingCancelled = true;
-      if (waitingSending) {
-        console.log(`[REPLY:SEND] id=${message.id} waitingSending=true, waiting 500ms`);
-        await new Promise(r => setTimeout(r, 500));
-      }
-      if (waitingMsg) {
-        console.log(`[REPLY:SEND] id=${message.id} editing waitingMsg`);
-        await waitingMsg.edit(text);
+
+      if (waitingMsgPromise) {
+        // 대기 메시지가 전송 중이거나 완료됨 → 기다린 후 수정
+        try {
+          const msg = await waitingMsgPromise;
+          await msg.edit(text);
+        } catch {
+          // 대기 메시지 전송 실패 시 새 메시지로
+          await message.reply(text);
+        }
       } else {
-        console.log(`[REPLY:SEND] id=${message.id} new message.reply`);
+        // 2초 안에 응답 완료 → 바로 전송
         await message.reply(text);
       }
     }
@@ -348,7 +336,9 @@ export function setupMessageHandler(client: Client): void {
       if (!reply) {
         clearTimeout(queueDelay);
         waitingCancelled = true;
-        if (waitingMsg) await (waitingMsg as Message).delete().catch(() => {});
+        if (waitingMsgPromise) {
+          try { const msg = await waitingMsgPromise; await (msg as Message).delete(); } catch {}
+        }
         return;
       }
 
