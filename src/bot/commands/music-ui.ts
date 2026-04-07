@@ -24,7 +24,7 @@ export function makePlayEmbed(track: Track, position: number) {
     title: position === 1 ? "Now Playing" : `#${position} 대기열 추가`,
     description: `**[${track.title}](${track.url})**`,
     fields,
-    thumbnail: track.thumbnail ? { url: track.thumbnail } : undefined,
+    thumbnail: track.thumbnail && track.thumbnail.startsWith("http") ? { url: track.thumbnail } : undefined,
   };
 }
 
@@ -50,7 +50,7 @@ export function buildControllerEmbed(track: Track, paused: boolean, queue: Track
     title: paused ? "Paused" : "Now Playing",
     description: `**[${track.title}](${track.url})**`,
     fields,
-    thumbnail: track.thumbnail ? { url: track.thumbnail } : undefined,
+    thumbnail: track.thumbnail && track.thumbnail.startsWith("http") ? { url: track.thumbnail } : undefined,
   };
 }
 
@@ -177,18 +177,11 @@ export async function showSearchPage(
       await btnInteraction.deferUpdate();
       const idx = parseInt(btnInteraction.customId.split("_")[1]);
       const track = allResults[idx];
-      console.log(`[PLAY:SELECT] track=${track.title} url=${track.url}`);
       const position = await playTrackDirect(voiceChannel, track);
-      console.log(`[PLAY:SELECT] position=${position}, editing reply...`);
 
-      const playEmbed = makePlayEmbed(track, position);
-      const buttons = buildControllerButtons(false);
-      console.log(`[PLAY:SELECT] embed=`, JSON.stringify(playEmbed).slice(0, 200));
-      await interaction.editReply({ content: null, embeds: [playEmbed], components: [buttons] });
-      console.log(`[PLAY:SELECT] editReply done`);
+      await interaction.editReply({ content: null, embeds: [makePlayEmbed(track, position)], components: [buildControllerButtons(false)] });
     }
-  } catch (err) {
-    console.error(`[PLAY:ERROR]`, (err as Error).message, (err as Error).stack);
+  } catch {
     await interaction.editReply({ embeds: [embed], components: [] }).catch(() => {});
   }
 }
