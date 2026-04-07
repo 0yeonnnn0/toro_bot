@@ -296,10 +296,7 @@ export function setupMessageHandler(client: Client): void {
     console.log(`[MENTION] id=${message.id} channel=${channelName} author=${message.author.displayName}`);
     trackUser(message.author.id, message.author.displayName, true);
     markUserRequest(message.author.id);
-
-    async function sendReply(text: string): Promise<void> {
-      await message.reply(text);
-    }
+    if ("sendTyping" in message.channel) (message.channel as any).sendTyping().catch(() => {});
 
     const startTime = Date.now();
     let replySent = false;
@@ -326,7 +323,7 @@ export function setupMessageHandler(client: Client): void {
 
       const resolved = resolveMentions(reply, message);
       console.log(`[MENTION:REPLY] id=${message.id} replySent=${replySent} reply="${resolved.slice(0, 50)}"`);
-      await sendReply(resolved);
+      await message.reply(resolved);
       replySent = true;
       console.log(`[MENTION:SENT] id=${message.id} replySent=true`);
       history.addMessage(channelId, { role: "assistant", content: reply });
@@ -378,7 +375,7 @@ export function setupMessageHandler(client: Client): void {
       // 에러 시 Discord에 에러 메시지를 보내지 않음 — 정상 응답이 별도로 도착하는 경우가 있어 중복 방지
       // 레이트 리밋일 때만 유저에게 알림
       if (!replySent && isRateLimit) {
-        await sendReply("오늘은 너무 많이 떠들었다냥... 내일 다시 돌아온다냥! >w<").catch(() => {});
+        await message.reply("오늘은 너무 많이 떠들었다냥... 내일 다시 돌아온다냥! >w<").catch(() => {});
       }
     }
   });
