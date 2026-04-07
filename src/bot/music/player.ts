@@ -92,7 +92,7 @@ export async function playTrack(
 
 export function skip(guildId: string): Track | null {
   const queue = queues.get(guildId);
-  if (!queue || !queue.playing || queue.tracks.length === 0) return null;
+  if (!queue || queue.tracks.length === 0) return null;
   const skipped = queue.tracks[0];
   queue.player.stop(true); // Idle 이벤트가 shift + 다음 곡 재생 트리거
   return skipped;
