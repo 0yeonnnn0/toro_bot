@@ -317,6 +317,7 @@ export function setupMessageHandler(client: Client): void {
     }
 
     const startTime = Date.now();
+    let replySent = false;
 
     try {
       let ragHitCount = 0;
@@ -345,6 +346,7 @@ export function setupMessageHandler(client: Client): void {
       const resolved = resolveMentions(reply, message);
       console.log(`[REPLY:SUCCESS] id=${message.id} sending reply`);
       await sendReply(resolved);
+      replySent = true;
       history.addMessage(channelId, { role: "assistant", content: reply });
       state.stats.repliesSent++;
 
@@ -389,12 +391,17 @@ export function setupMessageHandler(client: Client): void {
         model: null,
       });
 
-      const errorMsg = isRateLimit
-        ? "오늘은 너무 많이 떠들었다냥... 내일 다시 돌아온다냥! >w<"
-        : "뭔가 고장났다냥... @д@";
+      // 이미 정상 응답을 보냈으면 에러 메시지 중복 전송 방지
+      if (!replySent) {
+        const errorMsg = isRateLimit
+          ? "오늘은 너무 많이 떠들었다냥... 내일 다시 돌아온다냥! >w<"
+          : "뭔가 고장났다냥... @д@";
 
-      console.log(`[REPLY:ERROR] id=${message.id} sending error reply`);
-      await sendReply(errorMsg).catch(() => {});
+        console.log(`[REPLY:ERROR] id=${message.id} sending error reply`);
+        await sendReply(errorMsg).catch(() => {});
+      } else {
+        console.error(`[REPLY:POST_ERROR] id=${message.id} 응답 후 후처리 에러:`, (err as Error).message);
+      }
     }
   });
 }
