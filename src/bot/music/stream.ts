@@ -23,17 +23,13 @@ export function createAudioStream(url: string, volume: number): AudioResource {
 
   const ffmpeg = spawn("ffmpeg", [
     "-thread_queue_size", "8192",
-    "-reconnect", "1",
-    "-reconnect_streamed", "1",
     "-i", "pipe:0",
     "-analyzeduration", "0",
     "-probesize", "500000",
     "-loglevel", "0",
-    "-f", "opus",
-    "-acodec", "libopus",
+    "-f", "s16le",
     "-ar", "48000",
     "-ac", "2",
-    "-b:a", "128k",
     "pipe:1",
   ]);
 
@@ -54,7 +50,7 @@ export function createAudioStream(url: string, volume: number): AudioResource {
   ffmpeg.stdout.pipe(output);
 
   const resource = createAudioResource(output, {
-    inputType: StreamType.OggOpus,
+    inputType: StreamType.Raw,
     inlineVolume: true,
     silencePaddingFrames: 5,
   });
