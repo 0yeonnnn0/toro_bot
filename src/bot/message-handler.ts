@@ -297,34 +297,8 @@ export function setupMessageHandler(client: Client): void {
     trackUser(message.author.id, message.author.displayName, true);
     markUserRequest(message.author.id);
 
-    let waitingCancelled = false;
-    let waitingMsgPromise: Promise<Message<boolean>> | null = null;
-
-    const queueDelay = setTimeout(() => {
-      if (waitingCancelled) return;
-      waitingMsgPromise = message.reply("잠시 기다려달라냥... 0w0");
-    }, 2000);
-
     async function sendReply(text: string): Promise<void> {
-      clearTimeout(queueDelay);
-      waitingCancelled = true;
-
-      if (waitingMsgPromise) {
-        // 대기 메시지가 전송 중이거나 완료됨 → 기다린 후 수정
-        try {
-          console.log(`[SEND] id=${message.id} awaiting waitingMsgPromise...`);
-          const msg = await waitingMsgPromise;
-          console.log(`[SEND] id=${message.id} editing waiting message`);
-          await msg.edit(text);
-          console.log(`[SEND] id=${message.id} edit done`);
-        } catch (e) {
-          console.error(`[SEND] id=${message.id} edit failed: ${(e as Error).message}, sending new reply`);
-          await message.reply(text);
-        }
-      } else {
-        console.log(`[SEND] id=${message.id} no waiting message, sending new reply`);
-        await message.reply(text);
-      }
+      await message.reply(text);
     }
 
     const startTime = Date.now();
@@ -348,14 +322,7 @@ export function setupMessageHandler(client: Client): void {
 
       const responseTime = Date.now() - startTime;
 
-      if (!reply) {
-        clearTimeout(queueDelay);
-        waitingCancelled = true;
-        if (waitingMsgPromise) {
-          try { const msg = await waitingMsgPromise; await (msg as Message).delete(); } catch {}
-        }
-        return;
-      }
+      if (!reply) return;
 
       const resolved = resolveMentions(reply, message);
       console.log(`[MENTION:REPLY] id=${message.id} replySent=${replySent} reply="${resolved.slice(0, 50)}"`);
