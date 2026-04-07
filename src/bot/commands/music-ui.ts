@@ -160,7 +160,7 @@ export async function showSearchPage(
         const tracks = await searchTracks(url, interaction.user.displayName, 1);
 
         if (tracks.length === 0) {
-          await modalInteraction.reply({ content: "URL을 찾을 수 없어", ephemeral: true });
+          await modalInteraction.reply({ content: "URL을 찾을 수 없다냥 @д@", ephemeral: true });
           await interaction.editReply({ embeds: [embed], components: [] });
           return;
         }

@@ -31,7 +31,7 @@ export async function handlePlay(interaction: ChatInputCommandInteraction): Prom
   const voiceChannel = member?.voice.channel;
 
   if (!voiceChannel) {
-    await interaction.reply({ content: "먼저 음성 채널에 들어가", ephemeral: true });
+    await interaction.reply({ content: "먼저 음성 채널에 들어오라냥!", ephemeral: true });
     return;
   }
 
@@ -72,7 +72,7 @@ export async function handleSkip(interaction: ChatInputCommandInteraction): Prom
   if (skipped) {
     await interaction.reply(`**${skipped.title}** 스킵!`);
   } else {
-    await interaction.reply({ content: "재생 중인 곡이 없어", ephemeral: true });
+    await interaction.reply({ content: "재생 중인 곡이 없다냥 @д@", ephemeral: true });
   }
 }
 
@@ -101,7 +101,7 @@ export async function handleQueueCmd(interaction: ChatInputCommandInteraction): 
 
   const tracks = getQueue(guildId);
   if (tracks.length === 0) {
-    await interaction.reply({ content: "대기열이 비어있어", ephemeral: true });
+    await interaction.reply({ content: "대기열이 비어있다냥!", ephemeral: true });
     return;
   }
 
@@ -127,7 +127,7 @@ export async function handleNowPlaying(interaction: ChatInputCommandInteraction)
 
   const track = getNowPlaying(guildId);
   if (!track) {
-    await interaction.reply({ content: "재생 중인 곡이 없어", ephemeral: true });
+    await interaction.reply({ content: "재생 중인 곡이 없다냥 @д@", ephemeral: true });
     return;
   }
 
@@ -182,7 +182,7 @@ export async function handleAutoplay(interaction: ChatInputCommandInteraction): 
     const member = interaction.guild?.members.cache.get(interaction.user.id);
     const voiceChannel = member?.voice.channel;
     if (!voiceChannel) {
-      await interaction.reply({ content: "먼저 음성 채널에 들어가", ephemeral: true });
+      await interaction.reply({ content: "먼저 음성 채널에 들어오라냥!", ephemeral: true });
       return;
     }
     await interaction.deferReply();
@@ -196,7 +196,7 @@ export async function handleAutoplay(interaction: ChatInputCommandInteraction): 
     triggerAutoplayNow(guildId).catch(() => {});
     await interaction.editReply(`**${genreValue}** 자동 재생 시작!`);
   } else {
-    await interaction.reply({ content: "먼저 음악을 재생해줘", ephemeral: true });
+    await interaction.reply({ content: "먼저 음악을 재생하라냥!", ephemeral: true });
   }
 }
 
@@ -211,7 +211,7 @@ export async function handleRemove(interaction: ChatInputCommandInteraction): Pr
   if (removed) {
     await interaction.reply(`**${removed.title}** 대기열에서 제거`);
   } else {
-    await interaction.reply({ content: `${index}번 곡을 찾을 수 없어. \`/queue\`로 확인해봐`, ephemeral: true });
+    await interaction.reply({ content: `${index}번 곡을 찾을 수 없다냥. \`/queue\`로 확인하라냥!`, ephemeral: true });
   }
 }
 
@@ -240,7 +240,7 @@ export async function handleMusicButton(interaction: ButtonInteraction): Promise
       if (skipped) {
         await interaction.reply({ content: `**${skipped.title}** 스킵!`, ephemeral: true });
       } else {
-        await interaction.reply({ content: "스킵할 곡이 없어", ephemeral: true });
+        await interaction.reply({ content: "스킵할 곡이 없다냥 >w<", ephemeral: true });
       }
       break;
     }
@@ -254,7 +254,7 @@ export async function handleMusicButton(interaction: ButtonInteraction): Promise
       if (previous) {
         await interaction.reply({ content: `**${previous.title}** 이전 곡!`, ephemeral: true });
       } else {
-        await interaction.reply({ content: "이전 곡이 없어", ephemeral: true });
+        await interaction.reply({ content: "이전 곡이 없다냥 @д@", ephemeral: true });
       }
       break;
     }
