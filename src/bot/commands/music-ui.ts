@@ -173,15 +173,13 @@ export async function showSearchPage(
       }
 
     } else {
-      // 번호 선택
+      // 번호 선택 — deferUpdate로 즉시 응답 후 원래 메시지를 플레이 임베드로 교체
+      await btnInteraction.deferUpdate();
       const idx = parseInt(btnInteraction.customId.split("_")[1]);
       const track = allResults[idx];
-      await btnInteraction.deferReply({ ephemeral: true });
       const position = await playTrackDirect(voiceChannel, track);
 
-      await btnInteraction.editReply({ embeds: [makePlayEmbed(track, position)], components: [buildControllerButtons(false)] });
-      // 검색 결과 메시지에서 버튼 제거
-      await interaction.editReply({ embeds: [embed], components: [] }).catch(() => {});
+      await interaction.editReply({ content: null, embeds: [makePlayEmbed(track, position)], components: [buildControllerButtons(false)] });
     }
   } catch {
     await interaction.editReply({ embeds: [embed], components: [] }).catch(() => {});
