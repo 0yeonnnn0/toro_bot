@@ -177,11 +177,18 @@ export async function showSearchPage(
       await btnInteraction.deferUpdate();
       const idx = parseInt(btnInteraction.customId.split("_")[1]);
       const track = allResults[idx];
+      console.log(`[PLAY:SELECT] track=${track.title} url=${track.url}`);
       const position = await playTrackDirect(voiceChannel, track);
+      console.log(`[PLAY:SELECT] position=${position}, editing reply...`);
 
-      await interaction.editReply({ content: null, embeds: [makePlayEmbed(track, position)], components: [buildControllerButtons(false)] });
+      const playEmbed = makePlayEmbed(track, position);
+      const buttons = buildControllerButtons(false);
+      console.log(`[PLAY:SELECT] embed=`, JSON.stringify(playEmbed).slice(0, 200));
+      await interaction.editReply({ content: null, embeds: [playEmbed], components: [buttons] });
+      console.log(`[PLAY:SELECT] editReply done`);
     }
-  } catch {
+  } catch (err) {
+    console.error(`[PLAY:ERROR]`, (err as Error).message, (err as Error).stack);
     await interaction.editReply({ embeds: [embed], components: [] }).catch(() => {});
   }
 }
