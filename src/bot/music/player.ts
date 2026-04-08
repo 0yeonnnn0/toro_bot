@@ -133,7 +133,7 @@ export function getQueue(guildId: string): Track[] {
 
 export function getNowPlaying(guildId: string): Track | null {
   const queue = queues.get(guildId);
-  if (!queue || !queue.playing || queue.tracks.length === 0) return null;
+  if (!queue || queue.tracks.length === 0) return null;
   return queue.tracks[0];
 }
 
