@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { appendLog, migrateLogs } from "./log-store";
-import { DEFAULT_AI_PROVIDER, defaultModelForProvider, shouldMigrateLegacyGeminiDefault } from "./ai-defaults";
+import { DEFAULT_AI_PROVIDER, defaultModelForProvider, shouldMigrateLegacyChatDefault } from "./ai-defaults";
 
 const DATA_DIR = path.join(__dirname, "../../data");
 const STATE_FILE = path.join(DATA_DIR, "state.json");
@@ -97,11 +97,11 @@ function loadState(): Partial<State> | null {
 }
 
 const saved = loadState();
-const migrateLegacyGeminiDefault = shouldMigrateLegacyGeminiDefault(saved?.config?.aiProvider, saved?.config?.model);
-const resolvedAiProvider = migrateLegacyGeminiDefault
+const migrateLegacyChatDefault = shouldMigrateLegacyChatDefault(saved?.config?.aiProvider, saved?.config?.model);
+const resolvedAiProvider = migrateLegacyChatDefault
   ? DEFAULT_AI_PROVIDER
   : (saved?.config?.aiProvider ?? (process.env.AI_PROVIDER || DEFAULT_AI_PROVIDER));
-const resolvedModel = migrateLegacyGeminiDefault
+const resolvedModel = migrateLegacyChatDefault
   ? defaultModelForProvider(resolvedAiProvider)
   : (saved?.config?.model ?? defaultModelForProvider(resolvedAiProvider));
 

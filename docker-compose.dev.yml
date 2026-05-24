@@ -12,9 +12,11 @@ services:
     environment:
       NODE_ENV: development
       DATABASE_URL: file:/app/data/toro-dev.db
+      CODEX_HOME: ${CODEX_HOME:-/codex}
     volumes:
       - ./src:/app/src
       - ./prisma:/app/prisma
       - ./data:/app/data
+      - ${CODEX_HOME_HOST:-./codex}:/codex
       - ./package.json:/app/package.json:ro
       - ./tsconfig.json:/app/tsconfig.json:ro

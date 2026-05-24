@@ -10,6 +10,8 @@ docker compose logs -f --tail=100
 
 SQLite DB는 `./data:/app/data` 볼륨에 저장된다. Compose 파일은 `DATABASE_URL` 기본값을 `file:/app/data/toro.db`로 제공한다. 컨테이너 시작 시 `prisma migrate deploy` 후 앱을 시작한다. ffmpeg와 yt-dlp가 이미지에 포함된다.
 
+채팅 기본 AI는 OpenAI API 키가 아니라 Codex CLI 연결을 사용한다. 컨테이너는 `CODEX_HOME=/codex`를 읽고, compose는 호스트의 `${CODEX_HOME_HOST:-./codex}`를 `/codex`로 마운트한다. NAS에서는 Codex CLI 로그인을 한 뒤 `auth.json`/`config.toml`을 `/volume1/docker/toro-bot/codex/` 아래에 두거나, `.env`에 `CODEX_HOME_HOST=/path/to/.codex`를 지정한다. Codex CLI가 세션 토큰을 갱신할 수 있어야 하므로 이 마운트는 read-write다. `GOOGLE_API_KEY`는 Codex 실패 시 Gemini fallback과 `/draw`/RAG용으로 유지한다.
+
 
 ## NAS 영구 이름 전환: discord-bot → toro-bot
 
@@ -35,6 +37,7 @@ chmod +x migrate-discord-bot-to-toro-bot.sh
 - `/volume1/docker/discord-bot`을 `/volume1/docker/toro-bot`으로 rename한다.
 - compose service/container/image를 모두 `toro-bot` 기준으로 재작성한다.
 - `DATABASE_URL` 기본값을 `file:/app/data/toro.db`로 제공한다.
+- Codex CLI 로그인 캐시 마운트를 위해 `/volume1/docker/toro-bot/codex`를 만들고 `/codex`로 마운트한다.
 - 최신 `dusehd1/toro-bot:latest` 이미지를 pull하고 새 컨테이너를 띄운다.
 
 전환 후 확인:

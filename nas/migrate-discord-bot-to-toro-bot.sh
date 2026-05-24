@@ -53,6 +53,7 @@ if [ -d "$OLD_DIR" ]; then
 fi
 
 mkdir -p "$NEW_DIR/data"
+mkdir -p "$NEW_DIR/codex"
 cd "$NEW_DIR"
 
 log "Writing permanent toro-bot docker-compose.yml"
@@ -69,8 +70,10 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL:-file:/app/data/toro.db}
+      CODEX_HOME: ${CODEX_HOME:-/codex}
     volumes:
       - ./data:/app/data
+      - ${CODEX_HOME_HOST:-./codex}:/codex
 YAML
 
 log "Writing permanent toro-bot sync script"

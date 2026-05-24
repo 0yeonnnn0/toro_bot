@@ -9,6 +9,8 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL:-file:/app/data/toro.db}
+      CODEX_HOME: ${CODEX_HOME:-/codex}
     volumes:
       - ./data:/app/data
+      - ${CODEX_HOME_HOST:-./codex}:/codex
 

@@ -28,7 +28,7 @@ router.get("/config", (_req: Request, res: Response) => res.json({ ...safeConfig
 router.put("/config", (req: Request, res: Response) => {
   const { aiProvider, model, replyMode, judgeInterval, judgeThreshold } = req.body;
   if (aiProvider !== undefined) {
-    if (!["google", "openai", "anthropic"].includes(aiProvider)) {
+    if (!["codex", "google", "openai", "anthropic"].includes(aiProvider)) {
       return res.status(400).json({ error: "잘못된 aiProvider" });
     }
     state.config.aiProvider = aiProvider;
@@ -90,7 +90,13 @@ router.put("/keys", (req: Request, res: Response) => {
 router.post("/keys/test", async (req: Request, res: Response) => {
   const { provider } = req.body;
   try {
-    if (provider === "google") {
+    if (provider === "codex") {
+      const { execFile } = require("child_process");
+      execFile(process.env.CODEX_BIN || "codex", ["--version"], { timeout: 5000 }, (err: Error | null) => {
+        if (err) return res.json({ ok: false, error: "Codex CLI를 실행할 수 없음: " + err.message.slice(0, 80) });
+        return res.json({ ok: true });
+      });
+    } else if (provider === "google") {
       const key = state.config.googleApiKey || process.env.GOOGLE_API_KEY;
       if (!key) return res.json({ ok: false, error: "Google API 키가 설정되지 않음" });
       const { GoogleGenerativeAI } = require("@google/generative-ai");

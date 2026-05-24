@@ -9,6 +9,9 @@ interface ChatMessage {
 }
 
 const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
+  codex: [
+    { value: 'codex-cli-default', label: 'Codex CLI Default (ChatGPT 로그인)' },
+  ],
   google: [
     { value: 'gemini-3.1-flash-lite-preview', label: 'Gemini 3.1 Flash Lite (Preview)' },
     { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
@@ -39,7 +42,7 @@ const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
 }
 
 export default function Settings() {
-  const [provider, setProvider] = useState('openai')
+  const [provider, setProvider] = useState('codex')
   const [model, setModel] = useState('')
   const [imageRecognition, setImageRecognition] = useState(true)
   const [embeddingModel, setEmbeddingModel] = useState('gemini-embedding-001')
@@ -76,7 +79,7 @@ export default function Settings() {
 
   useEffect(() => {
     fetch('/api/config').then(r => r.json()).then(d => {
-      setProvider(d.aiProvider || 'openai')
+      setProvider(d.aiProvider || 'codex')
       setModel(d.model || '')
       setImageRecognition(d.imageRecognition ?? true)
       setEmbeddingModel(d.embeddingModel || 'gemini-embedding-001')
@@ -352,8 +355,9 @@ export default function Settings() {
                 setProvider(e.target.value)
                 setModel(MODEL_OPTIONS[e.target.value]?.[0]?.value || '')
               }} className="model-select" style={{ minWidth: 0, flex: '1 1 120px' }}>
-                <option value="openai">OpenAI Codex</option>
+                <option value="codex">Codex CLI</option>
                 <option value="google">Google Gemini</option>
+                <option value="openai">OpenAI API</option>
                 <option value="anthropic">Anthropic</option>
               </select>
               <select value={model} onChange={e => setModel(e.target.value)}

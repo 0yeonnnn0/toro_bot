@@ -1,3 +1,7 @@
+import fs from "fs";
+import os from "os";
+import path from "path";
+import { spawn } from "child_process";
 import { buildPromptWithCustom } from "./prompt";
 import { state } from "../shared/state";
 import { addEvent } from "../shared/state";
@@ -9,6 +13,8 @@ export let lastUsedModel = "";
 
 async function callProvider(provider: string, model: string, history: HistoryMessage[], prompt: string): Promise<string> {
   switch (provider) {
+    case "codex":
+      return await getCodexReply(history, prompt, model);
     case "anthropic":
       return await getAnthropicReply(history, prompt, model);
     case "openai":
@@ -105,7 +111,7 @@ export async function callAI(history: HistoryMessage[], prompt: string): Promise
   } catch (err) {
     const msg = (err as Error).message || "";
     const normalized = msg.toLowerCase();
-    const isRetryable = normalized.includes("429") || normalized.includes("quota") || normalized.includes("limit") || normalized.includes("500") || normalized.includes("503") || normalized.includes("overloaded") || normalized.includes("not found") || normalized.includes("does not exist") || normalized.includes("model");
+    const isRetryable = normalized.includes("429") || normalized.includes("quota") || normalized.includes("limit") || normalized.includes("500") || normalized.includes("503") || normalized.includes("overloaded") || normalized.includes("not found") || normalized.includes("does not exist") || normalized.includes("model") || normalized.includes("timed out") || normalized.includes("enoent") || normalized.includes("codex");
     const fallback = fallbackModel();
 
     if (!isRetryable || (provider === DEFAULT_GEMINI_FALLBACK_PROVIDER && model === fallback)) throw err;
@@ -116,6 +122,76 @@ export async function callAI(history: HistoryMessage[], prompt: string): Promise
     lastUsedModel = fallback;
     return await callProvider(DEFAULT_GEMINI_FALLBACK_PROVIDER, fallback, history, prompt);
   }
+}
+
+async function getCodexReply(history: HistoryMessage[], prompt: string, model: string): Promise<string> {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "toro-codex-"));
+  const outputFile = path.join(tmpDir, "answer.txt");
+  const args = [
+    "exec",
+    "--skip-git-repo-check",
+    "--sandbox",
+    "read-only",
+    "--ephemeral",
+    "--cd",
+    process.env.CODEX_WORKDIR || os.tmpdir(),
+    "--output-last-message",
+    outputFile,
+  ];
+  if (model && model !== "codex-cli-default") args.push("--model", model);
+  args.push("-");
+
+  const conversation = history.map((msg) => `${msg.role === "assistant" ? "TORO" : "User"}: ${msg.content}`).join("\n");
+  const codexPrompt = [
+    "You are TORO, a Discord chat bot. Use the persona/system instructions below and answer the latest conversation naturally.",
+    "Do not modify files. Do not run commands unless absolutely necessary. Return only the final chat reply text.",
+    "",
+    "<system_instructions>",
+    prompt,
+    "</system_instructions>",
+    "",
+    "<conversation>",
+    conversation,
+    "</conversation>",
+  ].join("\n");
+
+  try {
+    await runCodex(args, codexPrompt);
+    const reply = fs.readFileSync(outputFile, "utf-8").trim();
+    if (!reply) throw new Error("Codex returned an empty reply");
+    return reply;
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
+function runCodex(args: string[], input: string): Promise<void> {
+  const timeoutMs = Number(process.env.CODEX_TIMEOUT_MS || 180000);
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.env.CODEX_BIN || "codex", args, {
+      env: { ...process.env, NO_COLOR: "1" },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error(`Codex timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve();
+      else reject(new Error(`Codex exited with ${code}: ${(stderr || stdout).slice(-1000)}`));
+    });
+    child.stdin.end(input);
+  });
 }
 
 async function getAnthropicReply(history: HistoryMessage[], prompt: string, model: string): Promise<string> {
