@@ -1,34 +1,75 @@
 #!/bin/bash
-# NAS 디스코드봇 자동 배포 스크립트
-# 5분마다 Docker Hub에서 새 이미지 확인 후 재시작
-# NAS Task Scheduler에 등록: */5 * * * *
+set -euo pipefail
+# TORO bot NAS auto deploy script
+# Register this in Synology Task Scheduler, e.g. every 5 minutes.
 
-COMPOSE_DIR="/volume1/docker/toro-bot"
-LOG_FILE="$COMPOSE_DIR/sync.log"
-IMAGE="dusehd1/toro-bot:latest"
+COMPOSE_DIR="${COMPOSE_DIR:-/volume1/docker/toro-bot}"
+LOG_FILE="${LOG_FILE:-$COMPOSE_DIR/sync.log}"
+IMAGE="${IMAGE:-dusehd1/toro-bot:latest}"
+SERVICE="${SERVICE:-toro-bot}"
+LOCK_DIR="${LOCK_DIR:-/tmp/toro-bot-nas-sync.lock}"
 
 log() {
+  mkdir -p "$(dirname "$LOG_FILE")"
   echo "$(date '+%Y-%m-%d %H:%M:%S') $1" >> "$LOG_FILE"
 }
 
-cd "$COMPOSE_DIR" || exit 1
+cleanup() {
+  rmdir "$LOCK_DIR" 2>/dev/null || true
+}
 
-# 현재 이미지 digest 저장
-OLD_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE" 2>/dev/null)
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  log "Another sync is already running. Skipping."
+  exit 0
+fi
+trap cleanup EXIT
 
-# 새 이미지 pull
-docker compose pull toro-bot >> "$LOG_FILE" 2>&1
+cd "$COMPOSE_DIR" || {
+  log "Compose directory not found: $COMPOSE_DIR"
+  exit 1
+}
 
-# 새 이미지 digest 비교
-NEW_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE" 2>/dev/null)
-
-if [ "$OLD_DIGEST" != "$NEW_DIGEST" ]; then
-  log "New image detected. Restarting toro-bot..."
-  docker compose up -d toro-bot >> "$LOG_FILE" 2>&1
-  log "TORO bot restarted with new image."
-else
-  log "No update."
+COMPOSE="docker compose"
+if ! docker compose version >/dev/null 2>&1; then
+  if command -v docker-compose >/dev/null 2>&1; then
+    COMPOSE="docker-compose"
+  else
+    log "Neither 'docker compose' nor 'docker-compose' is available."
+    exit 1
+  fi
 fi
 
-# 로그 파일 1000줄 제한
+old_id="$(docker image inspect "$IMAGE" --format '{{.Id}}' 2>/dev/null || true)"
+old_digest="$(docker image inspect "$IMAGE" --format '{{join .RepoDigests ","}}' 2>/dev/null || true)"
+
+log "Checking image update for $IMAGE"
+if ! $COMPOSE pull "$SERVICE" >> "$LOG_FILE" 2>&1; then
+  log "docker compose pull failed. Keeping current container."
+  tail -1000 "$LOG_FILE" > "$LOG_FILE.tmp" && mv "$LOG_FILE.tmp" "$LOG_FILE"
+  exit 1
+fi
+
+new_id="$(docker image inspect "$IMAGE" --format '{{.Id}}' 2>/dev/null || true)"
+new_digest="$(docker image inspect "$IMAGE" --format '{{join .RepoDigests ","}}' 2>/dev/null || true)"
+
+if [ -z "$new_id" ]; then
+  log "Pulled image is missing locally after pull: $IMAGE"
+  exit 1
+fi
+
+if [ "$old_id" != "$new_id" ] || [ "$old_digest" != "$new_digest" ]; then
+  log "New image detected. Restarting $SERVICE..."
+  $COMPOSE up -d --remove-orphans "$SERVICE" >> "$LOG_FILE" 2>&1
+  log "Restarted $SERVICE with image id $new_id"
+else
+  running_id="$(docker inspect "$SERVICE" --format '{{.Image}}' 2>/dev/null || true)"
+  if [ "$running_id" != "$new_id" ]; then
+    log "Container is not using the current image. Recreating $SERVICE..."
+    $COMPOSE up -d --remove-orphans "$SERVICE" >> "$LOG_FILE" 2>&1
+    log "Recreated $SERVICE with image id $new_id"
+  else
+    log "No update."
+  fi
+fi
+
 tail -1000 "$LOG_FILE" > "$LOG_FILE.tmp" && mv "$LOG_FILE.tmp" "$LOG_FILE"

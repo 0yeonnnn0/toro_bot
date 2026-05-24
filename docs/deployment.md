@@ -50,6 +50,14 @@ docker compose logs --tail=200 toro-bot
 
 Task Scheduler에 기존 `/volume1/docker/discord-bot/nas-sync.sh`가 등록되어 있으면 반드시 `/volume1/docker/toro-bot/nas-sync.sh`로 바꾼다.
 
+자동 업데이트 작업은 Synology Task Scheduler에서 root 권한 또는 Docker socket 접근 권한이 있는 사용자로 실행해야 한다. 예시 명령:
+
+```bash
+/volume1/docker/toro-bot/nas-sync.sh
+```
+
+스크립트는 Docker Hub의 `dusehd1/toro-bot:latest`를 pull한 뒤 이미지 ID/digest가 바뀌었거나 현재 컨테이너가 최신 이미지를 쓰지 않을 때만 `docker compose up -d --remove-orphans toro-bot`로 재생성한다. 실행 로그는 `/volume1/docker/toro-bot/sync.log`에 남는다.
+
 ## 컨테이너가 바로 종료될 때 확인할 것
 
 ```bash
