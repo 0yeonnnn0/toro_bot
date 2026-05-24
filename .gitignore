@@ -7,3 +7,7 @@ frontend/dist
 
 # Runtime state (local only)
 data/state.json
+
+# Local Prisma SQLite databases
+prisma/*.db
+prisma/*.db-journal
