@@ -155,12 +155,13 @@ cp .env.example .env
 | `DASHBOARD_PORT` | 웹 서버 포트. 기본 `3000` |
 | `DASHBOARD_SECRET` | 관리자 대시보드 비밀번호 |
 | `DATABASE_URL` | Prisma DB URL. Docker 기본값은 `file:/app/data/toro.db` |
-| `AI_PROVIDER` | `google` / `openai` / `anthropic` |
-| `GOOGLE_API_KEY` | Google AI API 키 |
-| `GOOGLE_MODEL` | Google 텍스트 모델 |
+| `AI_PROVIDER` | `openai` / `google` / `anthropic`. 기본값은 OpenAI Codex |
+| `GOOGLE_API_KEY` | Google AI API 키. Codex 실패 시 Gemini fallback에도 사용 |
+| `GOOGLE_MODEL` | Google 텍스트/fallback 모델. 기본 `gemini-3.1-flash-lite-preview` |
 | `GOOGLE_IMAGE_MODEL_FLASH` | `/draw` Flash 이미지 모델 |
 | `GOOGLE_IMAGE_MODEL_PRO` | `/draw` Pro 이미지 모델 |
 | `OPENAI_API_KEY` | OpenAI API 키 |
+| `OPENAI_MODEL` | OpenAI/Codex 텍스트 모델. 기본 `gpt-5.1-codex` |
 | `ANTHROPIC_API_KEY` | Anthropic API 키 |
 | `TOKEN_ENCRYPTION_KEY` | OAuth token 암호화 키 |
 | `GOOGLE_CLIENT_ID` | Google Calendar OAuth client id |

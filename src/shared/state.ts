@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { appendLog, migrateLogs } from "./log-store";
+import { DEFAULT_AI_PROVIDER, defaultModelForProvider, shouldMigrateLegacyGeminiDefault } from "./ai-defaults";
 
 const DATA_DIR = path.join(__dirname, "../../data");
 const STATE_FILE = path.join(DATA_DIR, "state.json");
@@ -96,12 +97,19 @@ function loadState(): Partial<State> | null {
 }
 
 const saved = loadState();
+const migrateLegacyGeminiDefault = shouldMigrateLegacyGeminiDefault(saved?.config?.aiProvider, saved?.config?.model);
+const resolvedAiProvider = migrateLegacyGeminiDefault
+  ? DEFAULT_AI_PROVIDER
+  : (saved?.config?.aiProvider ?? (process.env.AI_PROVIDER || DEFAULT_AI_PROVIDER));
+const resolvedModel = migrateLegacyGeminiDefault
+  ? defaultModelForProvider(resolvedAiProvider)
+  : (saved?.config?.model ?? defaultModelForProvider(resolvedAiProvider));
 
 export const state: State = {
   config: {
     replyChance: saved?.config?.replyChance ?? 0.08,
-    aiProvider: saved?.config?.aiProvider ?? (process.env.AI_PROVIDER || "google"),
-    model: saved?.config?.model ?? (process.env.GOOGLE_MODEL || process.env.ANTHROPIC_MODEL || process.env.OPENAI_MODEL || "gemini-2.5-flash-lite"),
+    aiProvider: resolvedAiProvider,
+    model: resolvedModel,
     replyMode: saved?.config?.replyMode ?? "auto",
     judgeInterval: saved?.config?.judgeInterval ?? 120,
     judgeThreshold: saved?.config?.judgeThreshold ?? 5,

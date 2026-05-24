@@ -20,6 +20,8 @@ const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
     { value: 'gemma-3-1b-it', label: 'Gemma 3 1B' },
   ],
   openai: [
+    { value: 'gpt-5.1-codex', label: 'GPT-5.1 Codex (Default)' },
+    { value: 'gpt-5-codex', label: 'GPT-5 Codex' },
     { value: 'gpt-5', label: 'GPT-5' },
     { value: 'gpt-5-mini', label: 'GPT-5 Mini' },
     { value: 'gpt-5-nano', label: 'GPT-5 Nano' },
@@ -37,7 +39,7 @@ const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
 }
 
 export default function Settings() {
-  const [provider, setProvider] = useState('google')
+  const [provider, setProvider] = useState('openai')
   const [model, setModel] = useState('')
   const [imageRecognition, setImageRecognition] = useState(true)
   const [embeddingModel, setEmbeddingModel] = useState('gemini-embedding-001')
@@ -74,7 +76,7 @@ export default function Settings() {
 
   useEffect(() => {
     fetch('/api/config').then(r => r.json()).then(d => {
-      setProvider(d.aiProvider || 'google')
+      setProvider(d.aiProvider || 'openai')
       setModel(d.model || '')
       setImageRecognition(d.imageRecognition ?? true)
       setEmbeddingModel(d.embeddingModel || 'gemini-embedding-001')
@@ -350,8 +352,8 @@ export default function Settings() {
                 setProvider(e.target.value)
                 setModel(MODEL_OPTIONS[e.target.value]?.[0]?.value || '')
               }} className="model-select" style={{ minWidth: 0, flex: '1 1 120px' }}>
+                <option value="openai">OpenAI Codex</option>
                 <option value="google">Google Gemini</option>
-                <option value="openai">OpenAI</option>
                 <option value="anthropic">Anthropic</option>
               </select>
               <select value={model} onChange={e => setModel(e.target.value)}

@@ -1,12 +1,24 @@
 import { buildPromptWithCustom } from "./prompt";
 import { state } from "../shared/state";
 import { addEvent } from "../shared/state";
+import { defaultModelForProvider, fallbackModel, DEFAULT_GEMINI_FALLBACK_PROVIDER } from "../shared/ai-defaults";
 import type { HistoryMessage } from "./history";
-
-const FALLBACK_MODEL = "gemma-3-27b-it";
 
 // Tracks which model was actually used in the last callAI invocation
 export let lastUsedModel = "";
+
+async function callProvider(provider: string, model: string, history: HistoryMessage[], prompt: string): Promise<string> {
+  switch (provider) {
+    case "anthropic":
+      return await getAnthropicReply(history, prompt, model);
+    case "openai":
+      return await getOpenAIReply(history, prompt, model);
+    case "google":
+      return await getGoogleReply(history, prompt, model);
+    default:
+      throw new Error(`지원하지 않는 AI_PROVIDER: ${provider}`);
+  }
+}
 
 export async function getReply(history: HistoryMessage[], ragContext: string = "", userId: string = ""): Promise<string> {
   const basePrompt = buildPromptWithCustom(userId);
@@ -89,27 +101,20 @@ export async function callAI(history: HistoryMessage[], prompt: string): Promise
   lastUsedModel = model;
 
   try {
-    switch (provider) {
-      case "anthropic":
-        return await getAnthropicReply(history, prompt, model);
-      case "openai":
-        return await getOpenAIReply(history, prompt, model);
-      case "google":
-        return await getGoogleReply(history, prompt, model);
-      default:
-        throw new Error(`지원하지 않는 AI_PROVIDER: ${provider}`);
-    }
+    return await callProvider(provider, model, history, prompt);
   } catch (err) {
     const msg = (err as Error).message || "";
-    const isRetryable = msg.includes("429") || msg.includes("quota") || msg.includes("limit") || msg.includes("500") || msg.includes("503") || msg.includes("overloaded");
+    const normalized = msg.toLowerCase();
+    const isRetryable = normalized.includes("429") || normalized.includes("quota") || normalized.includes("limit") || normalized.includes("500") || normalized.includes("503") || normalized.includes("overloaded") || normalized.includes("not found") || normalized.includes("does not exist") || normalized.includes("model");
+    const fallback = fallbackModel();
 
-    if (!isRetryable || model === FALLBACK_MODEL) throw err;
+    if (!isRetryable || (provider === DEFAULT_GEMINI_FALLBACK_PROVIDER && model === fallback)) throw err;
 
-    console.warn(`[AI Fallback] ${provider}/${model} 실패 (${msg.slice(0, 80)}), ${FALLBACK_MODEL}로 재시도`);
-    addEvent("ai_fallback", `${provider}/${model} → ${FALLBACK_MODEL}`);
+    console.warn(`[AI Fallback] ${provider}/${model} 실패 (${msg.slice(0, 80)}), ${DEFAULT_GEMINI_FALLBACK_PROVIDER}/${fallback}로 재시도`);
+    addEvent("ai_fallback", `${provider}/${model} → ${DEFAULT_GEMINI_FALLBACK_PROVIDER}/${fallback}`);
 
-    lastUsedModel = FALLBACK_MODEL;
-    return await getGoogleReply(history, prompt, FALLBACK_MODEL);
+    lastUsedModel = fallback;
+    return await callProvider(DEFAULT_GEMINI_FALLBACK_PROVIDER, fallback, history, prompt);
   }
 }
 
@@ -119,7 +124,7 @@ async function getAnthropicReply(history: HistoryMessage[], prompt: string, mode
   const Anthropic = require("@anthropic-ai/sdk");
   const client = new Anthropic({ apiKey });
   const response = await client.messages.create({
-    model: model || "claude-sonnet-4-20250514",
+    model: model || defaultModelForProvider("anthropic"),
     max_tokens: 512,
     system: prompt,
     messages: history,
@@ -137,7 +142,7 @@ async function getOpenAIReply(history: HistoryMessage[], prompt: string, model: 
     ...history,
   ];
   const response = await client.chat.completions.create({
-    model: model || "gpt-4o",
+    model: model || defaultModelForProvider("openai"),
     max_tokens: 512,
     messages,
   });
@@ -153,7 +158,7 @@ async function getGoogleReply(history: HistoryMessage[], prompt: string, model: 
 
   // Gemma doesn't support systemInstruction, inject prompt as first user message instead
   const m = genAI.getGenerativeModel({
-    model: model || "gemini-2.5-flash-lite",
+    model: model || defaultModelForProvider("google"),
     ...(isGemma ? {} : { systemInstruction: prompt }),
   });
 
