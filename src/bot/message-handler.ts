@@ -1,11 +1,9 @@
 import type { Client, Message } from "discord.js";
-import { getReply, judgeAndReply, lastUsedModel } from "./ai";
+import { getReply, lastUsedModel } from "./ai";
 import * as history from "./history";
 import * as rag from "./rag";
 import { state, addLog, addError, trackUser, trackKeywords } from "../shared/state";
-import { enqueue, canUserRequest, markUserRequest } from "./queue";
-import { getPresets, setActivePreset, getActivePresetId } from "./prompt";
-import { isChannelMuted } from "./commands";
+import { enqueue, markUserRequest } from "./queue";
 import { fetchUrlContext } from "./scrape";
 import { getUserContext, extractAndSave } from "./vault";
 import type { ImageData } from "./history";
@@ -43,17 +41,6 @@ async function extractImage(message: Message): Promise<ImageData | undefined> {
 const conversationBuffer = new Map<string, { content: string }[]>();
 const BUFFER_SIZE = 5;
 
-// Interval mode state: timer + message counter per channel
-interface ChannelJudgeState {
-  timer: ReturnType<typeof setTimeout>;
-  msgCount: number;
-}
-const judgeState = new Map<string, ChannelJudgeState>();
-
-// Auto mode: 30s cooldown per channel — wait for conversation to build up
-const AUTO_COOLDOWN_MS = 30 * 1000;
-const autoCooldowns = new Map<string, ReturnType<typeof setTimeout>>();
-
 // ── Message deduplication ──
 const recentMessages = new Set<string>();
 const DEDUP_TTL = 10_000; // 10s
@@ -65,108 +52,6 @@ function isDuplicate(messageId: string): boolean {
   recentMessages.add(messageId);
   setTimeout(() => recentMessages.delete(messageId), DEDUP_TTL);
   return false;
-}
-
-// ── Commands ──
-function handleCommand(message: Message): boolean {
-  const content = message.content.trim();
-  if (!content.startsWith("!모드")) return false;
-
-  const args = content.split(/\s+/).slice(1);
-  const sub = args[0];
-
-  if (!sub || sub === "목록") {
-    const presets = getPresets();
-    const list = presets.map(p =>
-      `${p.active ? "▸ " : "  "}**${p.name}** (\`!모드 ${p.id}\`)${p.active ? " ← 현재" : ""}`
-    ).join("\n");
-    message.reply(`**프리셋 목록**\n${list}`);
-    return true;
-  }
-
-  const presets = getPresets();
-  const found = presets.find(p => p.id === sub || p.name.includes(sub));
-
-  if (!found) {
-    message.reply(`\`${sub}\` 프리셋을 못 찾겠어. \`!모드 목록\`으로 확인해봐`);
-    return true;
-  }
-
-  setActivePreset(found.id);
-  message.reply(`프리셋 변경: **${found.name}**`);
-  return true;
-}
-
-// ── AI Judge trigger ──
-async function triggerJudge(channelId: string, message: Message, channelName: string, guildName: string): Promise<void> {
-  console.log(`[JUDGE] channel=${channelName} msgId=${message.id} author=${message.author.displayName}`);
-  const cleanContent = message.content.replace(/<@!?\d+>/g, "").trim();
-
-  const startTime = Date.now();
-  try {
-    let ragHitCount = 0;
-    const reply = await enqueue(async () => {
-      const channelHistory = history.getHistory(channelId);
-      let ragResults: any[] = [];
-      try {
-        ragResults = await rag.searchRelevant(cleanContent);
-      } catch {}
-      ragHitCount = ragResults.length;
-      const urlContext = await fetchUrlContext(cleanContent);
-      const vaultContext = getUserContext(message.author.displayName);
-      const ragContext = rag.formatContext(ragResults) + urlContext + vaultContext;
-      return judgeAndReply(channelHistory, ragContext, message.author.id);
-    });
-
-    const responseTime = Date.now() - startTime;
-
-    if (!reply) {
-      addLog({
-        guild: guildName,
-        channel: channelName,
-        author: message.author.displayName,
-        content: cleanContent,
-        botReplied: false,
-        triggerReason: "random",
-        botReply: "<SKIP>",
-        responseTime,
-        ragHits: ragHitCount,
-        error: null,
-        model: lastUsedModel,
-      });
-      return;
-    }
-
-    markUserRequest(message.author.id);
-
-    const resolvedReply = resolveMentions(reply, message);
-    console.log(`[REPLY:JUDGE] msgId=${message.id} channel=${channelName} sending judge reply`);
-    await message.reply(resolvedReply);
-    history.addMessage(channelId, { role: "assistant", content: reply });
-    state.stats.repliesSent++;
-    trackUser(message.author.id, message.author.displayName, true);
-
-    // Background: extract user info
-    const extractHistory = history.getHistory(channelId).slice(-10);
-    extractAndSave(message.author.displayName, extractHistory).catch(() => {});
-
-    addLog({
-      guild: guildName,
-      channel: channelName,
-      author: message.author.displayName,
-      content: cleanContent,
-      botReplied: true,
-      triggerReason: "random",
-      botReply: reply,
-      responseTime,
-      ragHits: ragHitCount,
-      error: null,
-      model: lastUsedModel,
-    });
-  } catch (err) {
-    const isRateLimit = (err as Error).message?.includes("429") || (err as Error).message?.includes("quota");
-    addError(isRateLimit ? "rate_limit" : "api_error", (err as Error).message, `channel: ${channelName}, guild: ${guildName}`);
-  }
 }
 
 // ── Setup ──
@@ -185,8 +70,6 @@ export function setupMessageHandler(client: Client): void {
       console.log(`[DEDUP] 중복 메시지 무시: id=${message.id} author=${message.author.displayName}`);
       return;
     }
-    if (handleCommand(message)) return;
-
     const channelId = message.channel.id;
     const guildName = message.guild?.name || "DM";
     const channelName = "name" in message.channel ? (message.channel as any).name as string : "unknown";
@@ -195,8 +78,8 @@ export function setupMessageHandler(client: Client): void {
     const imageData = await extractImage(message);
 
     const isMentioned = message.mentions.has(client.user!);
-    console.log(`[MSG] id=${message.id} mention=${isMentioned} mode=${state.config.replyMode} channel=${channelName} author=${message.author.displayName} content="${cleanContent.slice(0, 30)}"`);
-    const shouldLog = isMentioned || state.config.passiveLogging;
+    console.log(`[MSG] id=${message.id} mention=${isMentioned} channel=${channelName} author=${message.author.displayName} content="${cleanContent.slice(0, 30)}"`);
+    const shouldLog = isMentioned;
 
     history.addMessage(channelId, {
       role: "user",
@@ -239,49 +122,8 @@ export function setupMessageHandler(client: Client): void {
       }
     }
 
-    // Mentioned → always reply. Otherwise → mode-based auto-participation.
+    // 일반 채팅은 최근 히스토리에만 두고, 자동 끼어들기/RAG 장기 저장은 하지 않는다.
     if (!isMentioned) {
-      const mode = state.config.replyMode;
-
-      // Mute mode → skip entirely
-      if (mode === "mute" || isChannelMuted(channelId)) return;
-
-      // Auto mode → 30s cooldown, then AI judges with full context
-      if (mode === "auto") {
-        // If timer already running, let it fire — don't reset
-        if (autoCooldowns.has(channelId)) return;
-
-        const timer = setTimeout(() => {
-          autoCooldowns.delete(channelId);
-          triggerJudge(channelId, message, channelName, guildName);
-        }, AUTO_COOLDOWN_MS);
-        autoCooldowns.set(channelId, timer);
-        return;
-      }
-
-      // Interval mode → timer + message count trigger
-      if (mode === "interval") {
-        const intervalMs = state.config.judgeInterval * 1000;
-        const threshold = state.config.judgeThreshold;
-        const cs = judgeState.get(channelId);
-
-        if (!cs) {
-          const timer = setTimeout(() => {
-            judgeState.delete(channelId);
-            triggerJudge(channelId, message, channelName, guildName);
-          }, intervalMs);
-          judgeState.set(channelId, { timer, msgCount: 1 });
-        } else {
-          cs.msgCount++;
-          if (cs.msgCount >= threshold) {
-            clearTimeout(cs.timer);
-            judgeState.delete(channelId);
-            triggerJudge(channelId, message, channelName, guildName);
-          }
-        }
-        return;
-      }
-
       return;
     }
 

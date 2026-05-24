@@ -3,13 +3,11 @@ import {
   REST,
   Routes,
 } from "discord.js";
-import { getPresets } from "../prompt";
 import { commands } from "./definitions";
 import { handleQuestion, handleSummary } from "./chat";
-import { handleHelp, handleMode, handleStatus, handleReply } from "./settings";
+import { handleHelp, handleStatus } from "./settings";
 import { handleDraw, handleSay } from "./media";
 import { handleMyInfo } from "./vault";
-import { handleMute, handleMuteStatus } from "./mute";
 import {
   handlePlay, handleSkip, handleStop, handlePause,
   handleQueueCmd, handleNowPlaying, handleVolume,
@@ -17,7 +15,6 @@ import {
 } from "./music";
 
 export { commands } from "./definitions";
-export { isChannelMuted } from "./mute";
 export { handleMusicButton } from "./music";
 
 // ── Register Commands ──
@@ -42,9 +39,6 @@ export async function handleInteraction(interaction: ChatInputCommandInteraction
     case "help":
       await handleHelp(interaction);
       break;
-    case "mode":
-      await handleMode(interaction);
-      break;
     case "ask":
       await handleQuestion(interaction);
       break;
@@ -62,15 +56,6 @@ export async function handleInteraction(interaction: ChatInputCommandInteraction
       break;
     case "내정보":
       await handleMyInfo(interaction);
-      break;
-    case "mute":
-      await handleMute(interaction);
-      break;
-    case "mute-status":
-      await handleMuteStatus(interaction);
-      break;
-    case "reply":
-      await handleReply(interaction);
       break;
     case "play":
       await handlePlay(interaction);
@@ -104,18 +89,5 @@ export async function handleInteraction(interaction: ChatInputCommandInteraction
 
 // ── Autocomplete ──
 export async function handleAutocomplete(interaction: any): Promise<void> {
-  const focused = interaction.options.getFocused(true);
-
-  if (focused.name === "preset") {
-    const presets = getPresets(true);
-    const filtered = presets.filter(p =>
-      p.id.includes(focused.value) || p.name.includes(focused.value)
-    );
-    await interaction.respond(
-      filtered.slice(0, 25).map(p => ({
-        name: `${p.name}${p.active ? " (현재)" : ""}`,
-        value: p.id,
-      }))
-    );
-  }
+  await interaction.respond([]);
 }
