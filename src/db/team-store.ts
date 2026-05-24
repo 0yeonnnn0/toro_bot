@@ -59,3 +59,44 @@ export async function addTeamMember(input: AddTeamMemberInput) {
     },
   });
 }
+
+
+export async function getMembershipsForUser(discordUserId: string) {
+  return prisma.teamMember.findMany({
+    where: { discordUserId },
+    include: { team: true },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+export async function getTeamMembers(teamId: string) {
+  return prisma.teamMember.findMany({
+    where: { teamId },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+export async function createTeamInvite(input: { teamId: string; createdById: string; code: string; expiresAt?: Date | null }) {
+  return prisma.teamInvite.create({
+    data: {
+      teamId: input.teamId,
+      createdById: input.createdById,
+      code: input.code,
+      expiresAt: input.expiresAt ?? null,
+    },
+  });
+}
+
+export async function getInviteByCode(code: string) {
+  return prisma.teamInvite.findUnique({
+    where: { code },
+    include: { team: true },
+  });
+}
+
+export async function markInviteUsed(inviteId: string) {
+  return prisma.teamInvite.update({
+    where: { id: inviteId },
+    data: { usedAt: new Date() },
+  });
+}

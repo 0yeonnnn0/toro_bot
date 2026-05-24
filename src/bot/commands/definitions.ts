@@ -6,6 +6,48 @@ export const commands = [
     .setDescription("TORO 사용 가이드"),
 
 
+
+  new SlashCommandBuilder()
+    .setName("login")
+    .setDescription("TORO 팀 로그인/가입 상태 확인"),
+
+  new SlashCommandBuilder()
+    .setName("team")
+    .setDescription("TORO 팀 관리")
+    .addSubcommand(sub =>
+      sub.setName("create")
+        .setDescription("새 TORO 팀 생성")
+        .addStringOption(opt =>
+          opt.setName("name").setDescription("팀 이름").setRequired(true)
+        )
+    )
+    .addSubcommand(sub =>
+      sub.setName("invite")
+        .setDescription("현재 팀 초대 코드 생성")
+    )
+    .addSubcommand(sub =>
+      sub.setName("join")
+        .setDescription("초대 코드로 TORO 팀 가입")
+        .addStringOption(opt =>
+          opt.setName("code").setDescription("초대 코드").setRequired(true)
+        )
+    )
+    .addSubcommand(sub =>
+      sub.setName("switch")
+        .setDescription("사용할 TORO 팀 선택")
+        .addStringOption(opt =>
+          opt.setName("team").setDescription("팀 슬러그").setRequired(true)
+        )
+    )
+    .addSubcommand(sub =>
+      sub.setName("info")
+        .setDescription("내 TORO 팀 정보 확인")
+    )
+    .addSubcommand(sub =>
+      sub.setName("members")
+        .setDescription("현재 TORO 팀 멤버 확인")
+    ),
+
   new SlashCommandBuilder()
     .setName("ask")
     .setDescription("봇에게 질문하기")
