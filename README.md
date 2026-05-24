@@ -228,6 +228,46 @@ docker compose up --build -d
 운영 컨테이너 시작 시 Prisma는 `prisma migrate deploy`를 사용한다.
 `prisma db push`는 운영 시작 경로에서 사용하지 않는다.
 
+### NAS 운영 배포
+
+NAS 운영 경로는 `/volume1/docker/toro-bot`이고, 운영 이미지는 `dusehd1/toro-bot:latest`다.
+`main`에 push하면 GitHub Actions가 Docker Hub 이미지를 갱신하고, NAS의 Watchtower가 `toro-bot`을 pull/restart한다.
+
+Watchtower를 컨테이너 이름 지정 방식으로 쓸 때는 기존 `discord-bot` 대상명을 `toro-bot`으로 바꿔야 한다.
+
+```bash
+sudo docker rm -f watchtower
+sudo docker run -d \
+  --name watchtower \
+  --restart unless-stopped \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  containrrr/watchtower \
+  --cleanup \
+  --interval 30 \
+  toro-bot \
+  lovesick1
+```
+
+NAS compose에는 `container_name: toro-bot`과 Watchtower label을 둔다.
+
+```yaml
+labels:
+  com.centurylinklabs.watchtower.enable: "true"
+```
+
+Codex CLI provider는 API 키 대신 Codex 로그인 캐시를 사용한다. 컨테이너 안에서 device auth로 로그인하고 `/codex`에 세션을 저장한다.
+
+```bash
+sudo docker exec -it toro-bot sh -lc 'CODEX_HOME=/codex codex login --device-auth'
+sudo docker exec -it toro-bot sh -lc 'CODEX_HOME=/codex codex exec --skip-git-repo-check --sandbox read-only --output-last-message /tmp/codex-test.txt "Reply exactly: toro-ok" >/tmp/codex-test.log 2>&1 && cat /tmp/codex-test.txt'
+```
+
+운영 healthcheck는 인증이 필요한 `/api/status`가 아니라 public `/healthz`를 사용한다.
+
+```bash
+sudo docker exec -it toro-bot sh -lc 'curl -fsS http://localhost:${DASHBOARD_PORT:-3000}/healthz'
+```
+
 ## 기본 사용 흐름
 
 1. Discord 서버에 TORO 봇을 초대한다.
