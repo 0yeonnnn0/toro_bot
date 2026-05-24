@@ -7,6 +7,7 @@ import { commands } from "./definitions";
 import { handleQuestion, handleSummary } from "./chat";
 import { handleHelp, handleStatus } from "./settings";
 import { handleLogin, handleTeamCommand } from "./team";
+import { handleCalendarCommand } from "./calendar";
 import { handleDraw, handleSay } from "./media";
 import { handleMyInfo } from "./vault";
 import {
@@ -42,6 +43,9 @@ export async function handleInteraction(interaction: ChatInputCommandInteraction
       break;
     case "team":
       await handleTeamCommand(interaction);
+      break;
+    case "calendar":
+      await handleCalendarCommand(interaction);
       break;
     case "help":
       await handleHelp(interaction);

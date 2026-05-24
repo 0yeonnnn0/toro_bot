@@ -1,5 +1,9 @@
 import type { Client, Message } from "discord.js";
 import { getReply, lastUsedModel } from "./ai";
+import { resolveTeamContext } from "../team/context";
+import { TeamLoginRequiredError, TeamSelectionRequiredError } from "../team/errors";
+import { appendConversationMessage, getRecentConversationHistory } from "../ai/conversation-store";
+import { routeToroMessage } from "../ai/router";
 import * as history from "./history";
 import * as rag from "./rag";
 import { state, addLog, addError, trackUser, trackKeywords } from "../shared/state";
@@ -147,7 +151,15 @@ export function setupMessageHandler(client: Client): void {
     try {
       let ragHitCount = 0;
       const reply = await enqueue(async () => {
-        const channelHistory = history.getHistory(channelId);
+        let teamContext;
+        try {
+          teamContext = await resolveTeamContext({ guildId: message.guildId, discordUserId: message.author.id });
+        } catch (err) {
+          if (err instanceof TeamLoginRequiredError || err instanceof TeamSelectionRequiredError) return err.message;
+          throw err;
+        }
+        await appendConversationMessage({ teamId: teamContext.team.id, guildId: message.guildId, channelId, role: "user", content: `${message.author.displayName}: ${cleanContent}${imageData ? " [이미지 첨부]" : ""}`, discordUserId: message.author.id, displayName: message.author.displayName, discordMessageId: message.id });
+        const teamHistory = await getRecentConversationHistory({ teamId: teamContext.team.id, guildId: message.guildId, channelId });
         let ragResults: any[] = [];
         try {
           ragResults = await rag.searchRelevant(cleanContent);
@@ -156,7 +168,10 @@ export function setupMessageHandler(client: Client): void {
         const urlContext = await fetchUrlContext(cleanContent);
         const vaultContext = getUserContext(message.author.displayName);
         const ragContext = rag.formatContext(ragResults) + urlContext + vaultContext;
-        return getReply(channelHistory, ragContext, message.author.id);
+        const mentionIds = [...message.mentions.users.keys()].filter((id) => id !== client.user?.id);
+        const routedReply = await routeToroMessage({ teamContext, content: cleanContent, mentions: mentionIds, history: teamHistory, source: { guildId: message.guildId, channelId, messageId: message.id }, chat: (conversationHistory) => getReply(conversationHistory, ragContext, message.author.id) });
+        await appendConversationMessage({ teamId: teamContext.team.id, guildId: message.guildId, channelId, role: "assistant", content: routedReply });
+        return routedReply;
       });
 
       const responseTime = Date.now() - startTime;

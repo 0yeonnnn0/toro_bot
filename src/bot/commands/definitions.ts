@@ -48,6 +48,31 @@ export const commands = [
         .setDescription("현재 TORO 팀 멤버 확인")
     ),
 
+
+
+  new SlashCommandBuilder()
+    .setName("calendar")
+    .setDescription("팀 Google Calendar 관리")
+    .addSubcommand(sub => sub.setName("connect").setDescription("팀 캘린더 연결 링크 생성"))
+    .addSubcommand(sub => sub.setName("status").setDescription("팀 캘린더 연결 상태 확인"))
+    .addSubcommand(sub => sub.setName("disconnect").setDescription("팀 캘린더 연결 해제"))
+    .addSubcommand(sub =>
+      sub.setName("list")
+        .setDescription("팀 일정 조회")
+        .addStringOption(opt => opt.setName("range").setDescription("오늘|이번주|다음주").addChoices(
+          { name: "오늘", value: "오늘" },
+          { name: "이번주", value: "이번주" },
+          { name: "다음주", value: "다음주" },
+        ))
+    )
+    .addSubcommand(sub =>
+      sub.setName("add")
+        .setDescription("팀 일정 추가")
+        .addStringOption(opt => opt.setName("title").setDescription("일정 제목").setRequired(true))
+        .addStringOption(opt => opt.setName("date").setDescription("날짜").setRequired(true))
+        .addStringOption(opt => opt.setName("time").setDescription("시간"))
+    ),
+
   new SlashCommandBuilder()
     .setName("ask")
     .setDescription("봇에게 질문하기")
