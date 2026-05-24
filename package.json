@@ -1,5 +1,5 @@
 {
-  "name": "discord-bot",
+  "name": "toro-bot",
   "version": "2.0.0",
   "description": "디스코드 대화 참여형 AI 봇",
   "main": "dist/index.js",

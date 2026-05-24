@@ -135,8 +135,8 @@
 ## 설치
 
 ```bash
-git clone https://github.com/0yeonnnn0/discord_bot.git
-cd discord_bot
+git clone https://github.com/0yeonnnn0/toro_bot.git
+cd toro_bot
 npm install
 cd frontend && npm install && npm run build && cd ..
 npx prisma generate

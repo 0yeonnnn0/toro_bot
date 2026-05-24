@@ -188,7 +188,7 @@ Discord message → client.ts
 ## NAS deployment
 
 - Synology NAS running Docker (Container Manager)
-- Bot container: `dusehd1/discord-bot:latest`
+- Bot container: `dusehd1/toro-bot:latest`
 - Watchtower container auto-pulls new images
 - Volumes: `./data:/app/data` + vault TORO mount
 - Syncthing container syncs Obsidian vault between NAS ↔ Mac
