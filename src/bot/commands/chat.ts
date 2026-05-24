@@ -1,6 +1,7 @@
 import { ChatInputCommandInteraction, TextChannel, ChannelType } from "discord.js";
 import { getReply } from "../ai";
 import { resolveTeamContext } from "../../team/context";
+import { TeamLoginRequiredError, TeamSelectionRequiredError } from "../../team/errors";
 import { appendConversationMessage, getRecentConversationHistory } from "../../ai/conversation-store";
 import { routeToroMessage } from "../../ai/router";
 
@@ -17,6 +18,10 @@ export async function handleQuestion(interaction: ChatInputCommandInteraction): 
     await appendConversationMessage({ teamId: teamContext.team.id, guildId: interaction.guildId, channelId: interaction.channelId, role: "assistant", content: reply });
     await interaction.editReply(reply);
   } catch (err) {
+    if (err instanceof TeamLoginRequiredError || err instanceof TeamSelectionRequiredError) {
+      await interaction.editReply(err.message);
+      return;
+    }
     const isRateLimit = (err as Error).message?.includes("429") || (err as Error).message?.includes("quota");
     await interaction.editReply(
       isRateLimit

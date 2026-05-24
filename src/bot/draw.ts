@@ -12,10 +12,10 @@ function getAI(): GoogleGenAI {
 
 export type ImageModel = "flash" | "pro";
 
-const MODEL_MAP: Record<ImageModel, string> = {
-  flash: "gemini-2.5-flash",
-  pro: "gemini-2.5-pro",
-};
+function imageModelName(quality: ImageModel): string {
+  if (quality === "pro") return process.env.GOOGLE_IMAGE_MODEL_PRO || "gemini-2.5-flash-image-preview";
+  return process.env.GOOGLE_IMAGE_MODEL_FLASH || "gemini-2.5-flash-image-preview";
+}
 
 const FALLBACK_ORDER: ImageModel[] = ["flash", "pro"];
 
@@ -34,7 +34,7 @@ export async function generateImage(
       const msg = (err as Error).message || "";
       const isRetryable = msg.includes("429") || msg.includes("quota") || msg.includes("limit") || msg.includes("503");
       if (!isRetryable || q === tryOrder[tryOrder.length - 1]) throw err;
-      console.warn(`[Image Fallback] ${MODEL_MAP[q]} 실패, ${MODEL_MAP[tryOrder[tryOrder.indexOf(q) + 1]]}로 재시도`);
+      console.warn(`[Image Fallback] ${imageModelName(q)} 실패, ${imageModelName(tryOrder[tryOrder.indexOf(q) + 1])}로 재시도`);
     }
   }
 
@@ -42,7 +42,7 @@ export async function generateImage(
 }
 
 async function tryGenerate(prompt: string, quality: ImageModel): Promise<AttachmentBuilder | null> {
-  const model = MODEL_MAP[quality];
+  const model = imageModelName(quality);
 
   const response = await getAI().models.generateContent({
     model,

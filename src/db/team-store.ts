@@ -38,6 +38,10 @@ export async function getTeamBySlug(slug: string) {
   return prisma.team.findUnique({ where: { slug } });
 }
 
+export async function getTeamByGuildId(guildId: string) {
+  return prisma.team.findUnique({ where: { guildId } });
+}
+
 export async function addTeamMember(input: AddTeamMemberInput) {
   const existing = await prisma.teamMember.findUnique({
     where: {

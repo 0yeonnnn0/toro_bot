@@ -6,6 +6,7 @@ vi.mock("../../db/team-store", () => ({
   createTeamInvite: vi.fn(),
   getInviteByCode: vi.fn(),
   getMembershipsForUser: vi.fn(),
+  getTeamByGuildId: vi.fn(),
   getTeamMembers: vi.fn(),
   markInviteUsed: vi.fn(),
 }));
@@ -17,7 +18,7 @@ import {
   handleTeamInfo,
   makeTeamSlug,
 } from "./team";
-import { createTeam, getMembershipsForUser } from "../../db/team-store";
+import { createTeam, getMembershipsForUser, getTeamByGuildId } from "../../db/team-store";
 
 function fakeInteraction(commandOptions: Record<string, string> = {}) {
   return {
@@ -70,6 +71,7 @@ describe("team commands", () => {
   });
 
   it("/team create creates a guild team owned by caller", async () => {
+    vi.mocked(getTeamByGuildId).mockResolvedValue(null as never);
     vi.mocked(createTeam).mockResolvedValue({ id: "team_1", name: "Alpha", slug: "alpha" } as never);
     const interaction = fakeInteraction({ name: "Alpha" });
 
@@ -83,6 +85,16 @@ describe("team commands", () => {
       ownerDisplayName: "Owner",
     });
     expect(interaction.reply).toHaveBeenCalledWith({ content: expect.stringContaining("Alpha"), ephemeral: true });
+  });
+
+  it("/team create rejects a second team in the same guild", async () => {
+    vi.mocked(getTeamByGuildId).mockResolvedValue({ id: "team_1", name: "Alpha", slug: "alpha" } as never);
+    const interaction = fakeInteraction({ name: "Beta" });
+
+    await handleTeamCreate(interaction);
+
+    expect(createTeam).not.toHaveBeenCalled();
+    expect(interaction.reply).toHaveBeenCalledWith({ content: expect.stringContaining("이미 TORO 팀"), ephemeral: true });
   });
 
   it("/team info explains when the user has no teams", async () => {

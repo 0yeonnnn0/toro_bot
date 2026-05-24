@@ -14,7 +14,7 @@ vi.mock("./client", () => ({
 }));
 
 import { prisma } from "./client";
-import { addTeamMember, createTeam, getTeamBySlug } from "./team-store";
+import { addTeamMember, createTeam, getTeamByGuildId, getTeamBySlug } from "./team-store";
 
 describe("team-store", () => {
   beforeEach(() => {
@@ -110,6 +110,14 @@ describe("team-store", () => {
 
     expect(result).toBe(existingMember);
     expect(prisma.teamMember.create).not.toHaveBeenCalled();
+  });
+
+  it("finds a team by guild id", async () => {
+    const team = { id: "team_1", name: "My Team", slug: "my-team", guildId: "guild_1", ownerId: "user_1", createdAt: new Date(), updatedAt: new Date() };
+    vi.mocked(prisma.team.findUnique).mockResolvedValue(team as never);
+
+    await expect(getTeamByGuildId("guild_1")).resolves.toBe(team);
+    expect(prisma.team.findUnique).toHaveBeenCalledWith({ where: { guildId: "guild_1" } });
   });
 
   it("finds a team by slug", async () => {

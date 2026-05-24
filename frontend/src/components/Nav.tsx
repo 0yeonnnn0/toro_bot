@@ -26,6 +26,7 @@ export default function Nav() {
         <div className="nav-links">
           <NavLink to="/admin" end>Overview</NavLink>
           <NavLink to="/admin/logs">Logs</NavLink>
+          <NavLink to="/admin/stored">Stored</NavLink>
           <NavLink to="/admin/settings">Settings</NavLink>
           <NavLink to="/music">Music</NavLink>
         </div>

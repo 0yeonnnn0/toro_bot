@@ -5,6 +5,7 @@ import {
   createTeamInvite,
   getInviteByCode,
   getMembershipsForUser,
+  getTeamByGuildId,
   getTeamMembers,
   markInviteUsed,
 } from "../../db/team-store";
@@ -54,6 +55,16 @@ export async function handleLogin(interaction: ChatInputCommandInteraction): Pro
 export async function handleTeamCreate(interaction: ChatInputCommandInteraction): Promise<void> {
   const name = interaction.options.getString("name", true);
   const slug = makeTeamSlug(name);
+  if (interaction.guildId) {
+    const existing = await getTeamByGuildId(interaction.guildId);
+    if (existing) {
+      await interaction.reply({
+        content: `이 서버에는 이미 TORO 팀 **${existing.name}** 이 있다냥. 새 팀 대신 \`/team info\` 또는 \`/team invite\`를 써줘라냥.`,
+        ephemeral: true,
+      });
+      return;
+    }
+  }
   const team = await createTeam({
     name,
     slug,

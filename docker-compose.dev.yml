@@ -1,0 +1,20 @@
+services:
+  toro-dev:
+    build:
+      context: .
+      target: backend
+    working_dir: /app
+    command: sh -c "npx prisma migrate deploy && npm run dev"
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: file:/app/data/toro-dev.db
+    volumes:
+      - ./src:/app/src
+      - ./prisma:/app/prisma
+      - ./data:/app/data
+      - ./package.json:/app/package.json:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro

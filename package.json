@@ -12,7 +12,10 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
-    "db:dev": "prisma migrate dev"
+    "db:dev": "prisma migrate dev",
+    "docker:dev": "docker compose -f docker-compose.dev.yml up --build",
+    "docker:test": "docker compose -f docker-compose.dev.yml run --rm toro-dev sh -c \"npx prisma migrate deploy && npm run typecheck && npm test && npm run build\"",
+    "docker:prod": "docker compose up --build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

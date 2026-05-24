@@ -114,3 +114,33 @@ export interface ChatLogEntry {
   model: string;
   timestamp: number;
 }
+
+
+export interface StoredMemo {
+  id: string;
+  team: { name: string; slug: string };
+  authorDiscordUserId: string;
+  subjectDiscordUserId: string | null;
+  content: string;
+  sourceGuildId: string | null;
+  sourceChannelId: string | null;
+  sourceMessageId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StoredConversation {
+  id: string;
+  team: { name: string; slug: string };
+  guildId: string | null;
+  channelId: string;
+  updatedAt: string;
+  messages: Array<{
+    id: string;
+    role: string;
+    displayName: string | null;
+    discordUserId: string | null;
+    content: string;
+    createdAt: string;
+  }>;
+}

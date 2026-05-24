@@ -5,7 +5,7 @@ vi.mock("../../db/client", () => ({
 }));
 
 import { prisma } from "../../db/client";
-import { encryptToken, decryptToken } from "./google-oauth";
+import { encryptToken, decryptToken, buildGoogleOAuthUrl, verifyGoogleOAuthState } from "./google-oauth";
 import { upsertCalendarConnection } from "./calendar-store";
 import { handleCalendarStatus, assertCanAdminCalendar } from "./calendar-tool";
 
@@ -28,6 +28,17 @@ describe("calendar tool", () => {
     expect(() => assertCanAdminCalendar("OWNER" as any)).not.toThrow();
     expect(() => assertCanAdminCalendar("ADMIN" as any)).not.toThrow();
     expect(() => assertCanAdminCalendar("MEMBER" as any)).toThrow();
+  });
+
+  it("builds signed OAuth state and verifies it", () => {
+    process.env.TOKEN_ENCRYPTION_KEY = "12345678901234567890123456789012";
+    process.env.GOOGLE_CLIENT_ID = "client-id";
+    process.env.GOOGLE_REDIRECT_URI = "http://localhost:3000/api/calendar/oauth/callback";
+    const url = new URL(buildGoogleOAuthUrl("team_1", "owner_1"));
+    const state = url.searchParams.get("state")!;
+
+    expect(verifyGoogleOAuthState(state)).toMatchObject({ teamId: "team_1", connectedByDiscordUserId: "owner_1" });
+    expect(() => verifyGoogleOAuthState(state.replace(/.$/, "x"))).toThrow();
   });
 
   it("reports disconnected calendar status", async () => {

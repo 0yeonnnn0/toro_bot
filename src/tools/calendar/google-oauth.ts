@@ -1,7 +1,10 @@
 import crypto from "crypto";
 
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+
 function getKey(): Buffer {
   const raw = process.env.TOKEN_ENCRYPTION_KEY || "";
+  if (!raw && process.env.NODE_ENV === "production") throw new Error("TOKEN_ENCRYPTION_KEY is required in production");
   if (raw.length === 32) return Buffer.from(raw);
   return crypto.createHash("sha256").update(raw || "dev-only-token-encryption-key").digest();
 }
@@ -21,6 +24,28 @@ export function decryptToken(value: string): string {
   return Buffer.concat([decipher.update(Buffer.from(encryptedRaw, "base64")), decipher.final()]).toString("utf8");
 }
 
+function signStatePayload(payload: string): string {
+  return crypto.createHmac("sha256", getKey()).update(payload).digest("base64url");
+}
+
+export function buildGoogleOAuthState(teamId: string, connectedByDiscordUserId = "unknown", issuedAt = Date.now()): string {
+  const payload = Buffer.from(JSON.stringify({ teamId, connectedByDiscordUserId, issuedAt }), "utf8").toString("base64url");
+  return `${payload}.${signStatePayload(payload)}`;
+}
+
+export function verifyGoogleOAuthState(state: string, now = Date.now()): { teamId: string; connectedByDiscordUserId: string; issuedAt: number } {
+  const [payload, signature] = state.split(".");
+  if (!payload || !signature) throw new Error("Invalid Google OAuth state");
+  const expected = signStatePayload(payload);
+  const a = Buffer.from(signature);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) throw new Error("Invalid Google OAuth state signature");
+  const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { teamId?: string; connectedByDiscordUserId?: string; issuedAt?: number };
+  if (!parsed.teamId || !parsed.connectedByDiscordUserId || typeof parsed.issuedAt !== "number") throw new Error("Invalid Google OAuth state payload");
+  if (now - parsed.issuedAt > OAUTH_STATE_TTL_MS) throw new Error("Expired Google OAuth state");
+  return { teamId: parsed.teamId, connectedByDiscordUserId: parsed.connectedByDiscordUserId, issuedAt: parsed.issuedAt };
+}
+
 export function buildGoogleOAuthUrl(teamId: string, connectedByDiscordUserId = "unknown"): string {
   const clientId = process.env.GOOGLE_CLIENT_ID || "";
   const redirectUri = process.env.GOOGLE_REDIRECT_URI || "http://localhost:3000/api/calendar/oauth/callback";
@@ -31,7 +56,7 @@ export function buildGoogleOAuthUrl(teamId: string, connectedByDiscordUserId = "
     scope: "https://www.googleapis.com/auth/calendar",
     access_type: "offline",
     prompt: "consent",
-    state: `${teamId}:${connectedByDiscordUserId}`,
+    state: buildGoogleOAuthState(teamId, connectedByDiscordUserId),
   });
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
