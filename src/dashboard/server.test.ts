@@ -42,4 +42,23 @@ describe("createServer", () => {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
     }
   });
+
+  it("exposes unauthenticated healthcheck endpoint", async () => {
+    const app = createServer();
+    const server: Server = await new Promise((resolve) => {
+      const s = app.listen(0, () => resolve(s));
+    });
+    try {
+      const addr = server.address();
+      if (!addr || typeof addr === "string") throw new Error("No test server address");
+      const base = `http://127.0.0.1:${addr.port}`;
+
+      const health = await fetch(`${base}/healthz`);
+
+      expect(health.status).toBe(200);
+      await expect(health.json()).resolves.toEqual({ ok: true });
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+    }
+  });
 });

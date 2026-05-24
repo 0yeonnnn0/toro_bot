@@ -32,6 +32,10 @@ export function createServer(): express.Application {
 
   const sessions = new Set<string>();
 
+  app.get("/healthz", (_req, res) => {
+    res.json({ ok: true });
+  });
+
   app.post("/api/login", (req, res) => {
     const secret = getSecret();
     if (!secret || secret === "changeme") return res.json({ ok: true });
