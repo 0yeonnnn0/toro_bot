@@ -36,7 +36,8 @@ chmod +x migrate-discord-bot-to-toro-bot.sh
 - 기존 컨테이너/compose를 내린다.
 - `/volume1/docker/discord-bot`을 `/volume1/docker/toro-bot`으로 rename한다.
 - compose service/container/image를 모두 `toro-bot` 기준으로 재작성한다.
-- `DATABASE_URL` 기본값을 `file:/app/data/toro.db`로 제공한다.
+- Watchtower가 label-enable 모드에서도 감시하도록 `com.centurylinklabs.watchtower.enable=true` label을 붙인다.
+- `DATABASE_URL` 기본값을 `file:/app/data/toro.db`로 보강한다.
 - Codex CLI 로그인 캐시 마운트를 위해 `/volume1/docker/toro-bot/codex`를 만들고 `/codex`로 마운트한다.
 - 최신 `dusehd1/toro-bot:latest` 이미지를 pull하고 새 컨테이너를 띄운다.
 

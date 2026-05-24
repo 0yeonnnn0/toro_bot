@@ -3,6 +3,8 @@ services:
     image: dusehd1/toro-bot:latest
     container_name: toro-bot
     restart: unless-stopped
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     ports:
       - "9482:3000"
     env_file:
