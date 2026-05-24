@@ -28,12 +28,14 @@ export interface PresetInfo {
 
 // ── 프리셋 저장/불러오기 ──
 let presets: Record<string, Preset> = { ...DEFAULT_PRESETS };
-let activePresetId = "neko";
+const FIXED_PRESET_ID = "neko";
+let activePresetId = FIXED_PRESET_ID;
 
 try {
   if (fs.existsSync(PRESETS_FILE)) {
     const saved = JSON.parse(fs.readFileSync(PRESETS_FILE, "utf-8"));
     const merged: Record<string, Preset> = { ...DEFAULT_PRESETS, ...saved };
+    merged[FIXED_PRESET_ID] = DEFAULT_PRESETS[FIXED_PRESET_ID];
     // Restore saved order
     if (fs.existsSync(ORDER_FILE)) {
       const order: string[] = JSON.parse(fs.readFileSync(ORDER_FILE, "utf-8"));
@@ -51,13 +53,8 @@ try {
     }
     console.log("저장된 프리셋 복원 완료");
   }
-  if (fs.existsSync(ACTIVE_FILE)) {
-    const data = JSON.parse(fs.readFileSync(ACTIVE_FILE, "utf-8"));
-    let id = data.activePresetId || "neko";
-    // Migrate old preset ID
-    if (id === "mimic") id = "yeonnnn";
-    activePresetId = id;
-  }
+  // TORO 말투는 냥체 프리셋으로 고정한다. 저장된 active preset은 무시한다.
+  activePresetId = FIXED_PRESET_ID;
 } catch (err) {
   console.error("프리셋 복원 실패:", (err as Error).message);
 }
@@ -86,7 +83,7 @@ function savePresets(): void {
 // ── API ──
 export function getPresets(enabledOnly = false): PresetInfo[] {
   return Object.entries(presets)
-    .filter(([, p]) => !enabledOnly || p.enabled !== false)
+    .filter(([id, p]) => id === FIXED_PRESET_ID && (!enabledOnly || p.enabled !== false))
     .map(([id, p]) => ({
       id,
       name: p.name,
@@ -97,17 +94,8 @@ export function getPresets(enabledOnly = false): PresetInfo[] {
 }
 
 export function reorderPresets(orderedIds: string[]): boolean {
-  const reordered: Record<string, Preset> = {};
-  for (const id of orderedIds) {
-    if (presets[id]) reordered[id] = presets[id];
-  }
-  // Append any remaining presets not in the list
-  for (const [id, p] of Object.entries(presets)) {
-    if (!reordered[id]) reordered[id] = p;
-  }
-  // Replace presets object while keeping reference
-  for (const key of Object.keys(presets)) delete presets[key];
-  Object.assign(presets, reordered);
+  void orderedIds;
+  activePresetId = FIXED_PRESET_ID;
   savePresets();
   return true;
 }
@@ -117,17 +105,23 @@ export function getPreset(id: string): Preset | null {
 }
 
 export function getActivePresetId(): string {
-  return activePresetId;
+  return FIXED_PRESET_ID;
 }
 
 export function setActivePreset(id: string): boolean {
-  if (!presets[id]) return false;
-  activePresetId = id;
+  if (id !== FIXED_PRESET_ID || !presets[FIXED_PRESET_ID]) return false;
+  activePresetId = FIXED_PRESET_ID;
   savePresets();
   return true;
 }
 
 export function upsertPreset(id: string, data: Partial<Preset>): void {
+  if (id === FIXED_PRESET_ID) {
+    presets[FIXED_PRESET_ID] = DEFAULT_PRESETS[FIXED_PRESET_ID];
+    activePresetId = FIXED_PRESET_ID;
+    savePresets();
+    return;
+  }
   const existing = presets[id];
   presets[id] = {
     name: data.name || id,
@@ -142,6 +136,12 @@ export function upsertPreset(id: string, data: Partial<Preset>): void {
 }
 
 export function togglePreset(id: string, enabled: boolean): boolean {
+  if (id === FIXED_PRESET_ID) {
+    presets[FIXED_PRESET_ID] = DEFAULT_PRESETS[FIXED_PRESET_ID];
+    activePresetId = FIXED_PRESET_ID;
+    savePresets();
+    return true;
+  }
   if (!presets[id]) return false;
   presets[id].enabled = enabled;
   // If disabling the active preset, fall back to neko
@@ -153,20 +153,21 @@ export function togglePreset(id: string, enabled: boolean): boolean {
 }
 
 export function deletePreset(id: string): boolean {
+  if (id === FIXED_PRESET_ID) return false;
   if (!presets[id]) return false;
   delete presets[id];
-  if (activePresetId === id) activePresetId = "neko";
+  if (activePresetId === id) activePresetId = FIXED_PRESET_ID;
   savePresets();
   return true;
 }
 
 // ── 프롬프트 빌드 ──
 export function getActivePrompt(): string {
-  return presets[activePresetId]?.prompt || presets.neko.prompt;
+  return presets[FIXED_PRESET_ID]?.prompt || presets.neko.prompt;
 }
 
 export function buildPromptWithCustom(userId: string): string {
-  const preset = presets[activePresetId] || presets.neko;
+  const preset = presets[FIXED_PRESET_ID] || presets.neko;
   const ownerIds = (process.env.OWNER_ID || "").split(",").map((id) => id.trim());
   const isOwner = ownerIds.includes(userId);
 
@@ -179,4 +180,4 @@ export function buildPromptWithCustom(userId: string): string {
   return result;
 }
 
-console.log(`프리셋: ${activePresetId} (${presets[activePresetId]?.name})`);
+console.log(`프리셋: ${FIXED_PRESET_ID} (${presets[FIXED_PRESET_ID]?.name})`);

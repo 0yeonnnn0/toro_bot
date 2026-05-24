@@ -39,13 +39,7 @@ const MODEL_OPTIONS: Record<string, { value: string; label: string }[]> = {
 export default function Settings() {
   const [provider, setProvider] = useState('google')
   const [model, setModel] = useState('')
-  const [replyMode, setReplyMode] = useState('auto')
-  const [judgeInterval, setJudgeInterval] = useState(120)
-  const [judgeThreshold, setJudgeThreshold] = useState(5)
-  const [judgePrompt, setJudgePrompt] = useState('')
-  const [defaultJudgePrompt, setDefaultJudgePrompt] = useState('')
   const [imageRecognition, setImageRecognition] = useState(true)
-  const [passiveLogging, setPassiveLogging] = useState(true)
   const [embeddingModel, setEmbeddingModel] = useState('gemini-embedding-001')
   const [webShowNickname, setWebShowNickname] = useState(false)
   const [webSystemPrompt, setWebSystemPrompt] = useState('')
@@ -82,13 +76,7 @@ export default function Settings() {
     fetch('/api/config').then(r => r.json()).then(d => {
       setProvider(d.aiProvider || 'google')
       setModel(d.model || '')
-      setReplyMode(d.replyMode || 'auto')
-      setJudgeInterval(d.judgeInterval || 120)
-      setJudgeThreshold(d.judgeThreshold || 5)
-      setJudgePrompt(d.judgePrompt || '')
-      setDefaultJudgePrompt(d.defaultJudgePrompt || '')
       setImageRecognition(d.imageRecognition ?? true)
-      setPassiveLogging(d.passiveLogging ?? true)
       setEmbeddingModel(d.embeddingModel || 'gemini-embedding-001')
       setWebShowNickname(d.webShowNickname ?? false)
       setWebSystemPrompt(d.webSystemPrompt || '')
@@ -182,17 +170,6 @@ export default function Settings() {
     } catch { toast.error('프리셋 삭제 실패') }
   }
 
-  const saveReplyMode = async () => {
-    try {
-      const res = await fetch('/api/config', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ replyMode, judgeInterval, judgeThreshold, judgePrompt }),
-      })
-      const labels: Record<string, string> = { auto: '자동', interval: '간격', mute: '음소거' }
-      res.ok ? toast.success(`응답 모드: ${labels[replyMode]}`) : toast.error('저장 실패')
-    } catch { toast.error('저장 실패') }
-  }
 
   const saveModel = async () => {
     try {
@@ -201,7 +178,8 @@ export default function Settings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ aiProvider: provider, model }),
       })
-      res.ok ? toast.success(`모델 변경: ${model}`) : toast.error('저장 실패')
+      if (res.ok) toast.success(`모델 변경: ${model}`)
+      else toast.error('저장 실패')
     } catch { toast.error('저장 실패') }
   }
 
@@ -328,7 +306,8 @@ export default function Settings() {
         body: JSON.stringify({ provider }),
       })
       const data = await res.json()
-      data.ok ? toast.success(`${provider} 키 유효`) : toast.error(data.error || '키 검증 실패')
+      if (data.ok) toast.success(`${provider} 키 유효`)
+      else toast.error(data.error || '키 검증 실패')
     } catch { toast.error('키 검증 실패') }
     setTestingKey(null)
   }
@@ -425,84 +404,13 @@ export default function Settings() {
             </div>
 
             <div style={{ marginTop: 'var(--space-4)' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer' }}>
-                <input type="checkbox" checked={passiveLogging}
-                  onChange={e => {
-                    setPassiveLogging(e.target.checked)
-                    fetch('/api/config', {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ passiveLogging: e.target.checked }),
-                    }).then(() => toast.success(e.target.checked ? '대화 수집 켜짐' : '대화 수집 꺼짐')).catch(() => {})
-                  }} />
-                대화 수집 (로그 · RAG · 통계)
-              </label>
-              <p className="form-hint">꺼두면 멘션이 아닌 일반 대화는 로그, RAG 메모리, 키워드 통계에 기록되지 않습니다. 멘션 대화는 항상 기록됩니다.</p>
-            </div>
-          </div>
-
-          {/* Reply Mode */}
-          <div className="panel" id="reply-mode">
-            <div className="panel-header">
-              <span className="panel-title">Reply Mode</span>
-              <button className="btn btn-primary" onClick={saveReplyMode}>Save</button>
-            </div>
-            <div style={{ display: 'flex', gap: 'var(--space-3)', marginBottom: 'var(--space-5)', flexWrap: 'wrap' }}>
-              {[
-                { value: 'auto', label: '자동 (AI 판단)' },
-                { value: 'interval', label: '간격 모드' },
-                { value: 'mute', label: '음소거' },
-              ].map(m => (
-                <button
-                  key={m.value}
-                  className={`btn ${replyMode === m.value ? 'btn-primary' : 'btn-ghost'}`}
-                  style={{ flex: '1 1 auto' }}
-                  onClick={() => setReplyMode(m.value)}
-                >
-                  {m.label}
-                </button>
-              ))}
-            </div>
-            {replyMode === 'interval' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-                <div>
-                  <div className="hint" style={{ marginBottom: 'var(--space-2)' }}>타이머 (초)</div>
-                  <div className="slider-row">
-                    <input type="range" min="10" max="600" value={judgeInterval}
-                      onChange={e => setJudgeInterval(Number(e.target.value))} />
-                    <span className="slider-value">{judgeInterval}s</span>
-                  </div>
-                </div>
-                <div>
-                  <div className="hint" style={{ marginBottom: 'var(--space-2)' }}>메시지 수</div>
-                  <div className="slider-row">
-                    <input type="range" min="1" max="50" value={judgeThreshold}
-                      onChange={e => setJudgeThreshold(Number(e.target.value))} />
-                    <span className="slider-value">{judgeThreshold}개</span>
-                  </div>
-                </div>
-                <p className="form-hint">{judgeInterval}초 또는 {judgeThreshold}개 메시지 중 먼저 도달하면 AI가 판단</p>
+              <div className="model-info-item">
+                <span className="model-info-label">Reply Mode</span>
+                <span className="model-info-value">멘션/명령어 전용</span>
+                <span className="model-info-badge fixed">고정</span>
               </div>
-            )}
-            {replyMode === 'auto' && (
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
-                  <div className="card-label" style={{ marginBottom: 0 }}>AI 판단 프롬프트</div>
-                  {judgePrompt && (
-                    <button className="btn btn-ghost" style={{ padding: '2px 8px', fontSize: '0.65rem' }}
-                      onClick={() => setJudgePrompt('')}>기본값으로 초기화</button>
-                  )}
-                </div>
-                <textarea rows={14} value={judgePrompt || defaultJudgePrompt}
-                  onChange={e => setJudgePrompt(e.target.value)}
-                  spellCheck={false}
-                  style={{ minHeight: '260px' }} />
-                <p className="form-hint">봇이 자동으로 끼어들지 판단하는 프롬프트. 반드시 &lt;SKIP&gt; 응답 조건을 포함해야 함.</p>
-              </div>
-            )}
-            {replyMode === 'mute' && (
-              <p className="form-hint">자동 참여 완전 중단 (멘션은 여전히 응답)</p>
-            )}
+              <p className="form-hint">일반 채팅은 자동으로 끼어들거나 RAG에 장기 저장하지 않습니다. 멘션으로 직접 부른 대화만 기억 후보로 기록됩니다.</p>
+            </div>
           </div>
 
           {/* Web Chat Settings */}
@@ -515,7 +423,8 @@ export default function Settings() {
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ webShowNickname, webSystemPrompt }),
                 })
-                res.ok ? toast.success('웹 채팅 설정 저장') : toast.error('저장 실패')
+                if (res.ok) toast.success('웹 채팅 설정 저장')
+                else toast.error('저장 실패')
               }}>Save</button>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }}>

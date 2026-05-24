@@ -5,21 +5,6 @@ export const commands = [
     .setName("help")
     .setDescription("TORO 사용 가이드"),
 
-  new SlashCommandBuilder()
-    .setName("mode")
-    .setDescription("봇 프리셋 관리")
-    .addSubcommand(sub =>
-      sub.setName("list").setDescription("프리셋 목록 보기")
-    )
-    .addSubcommand(sub =>
-      sub.setName("set").setDescription("프리셋 변경")
-        .addStringOption(opt =>
-          opt.setName("preset").setDescription("적용할 프리셋").setRequired(true).setAutocomplete(true)
-        )
-    )
-    .addSubcommand(sub =>
-      sub.setName("current").setDescription("현재 프리셋 확인")
-    ),
 
   new SlashCommandBuilder()
     .setName("ask")
@@ -78,34 +63,7 @@ export const commands = [
       opt.setName("user").setDescription("다른 유저 정보 확인 (선택)")
     ),
 
-  new SlashCommandBuilder()
-    .setName("mute")
-    .setDescription("이 채널에서 봇 임시 정지/해제")
-    .addIntegerOption(opt =>
-      opt.setName("minutes").setDescription("정지 시간 (분, 기본 30분, 0이면 해제)").setMinValue(0).setMaxValue(1440)
-    ),
 
-  new SlashCommandBuilder()
-    .setName("mute-status")
-    .setDescription("이 채널의 음소거 남은 시간 확인"),
-
-  new SlashCommandBuilder()
-    .setName("reply")
-    .setDescription("봇 응답 모드 변경")
-    .addStringOption(opt =>
-      opt.setName("mode").setDescription("응답 모드").setRequired(true)
-        .addChoices(
-          { name: "자동 (AI 판단)", value: "auto" },
-          { name: "간격 (타이머/메시지 수)", value: "interval" },
-          { name: "음소거", value: "mute" },
-        )
-    )
-    .addIntegerOption(opt =>
-      opt.setName("interval").setDescription("간격 모드: 타이머 (초, 기본 120)").setMinValue(10).setMaxValue(600)
-    )
-    .addIntegerOption(opt =>
-      opt.setName("threshold").setDescription("간격 모드: 메시지 수 (기본 5)").setMinValue(1).setMaxValue(50)
-    ),
 
   // ── Music ──
   new SlashCommandBuilder()

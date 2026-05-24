@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getPresets, getPreset, getActivePresetId, setActivePreset, upsertPreset, deletePreset, getActivePrompt, buildPromptWithCustom } from "./prompt";
+import { getPresets, getPreset, getActivePresetId, setActivePreset, getActivePrompt, buildPromptWithCustom } from "./prompt";
 
 describe("prompt presets", () => {
   it("should have default presets", () => {
@@ -11,7 +11,7 @@ describe("prompt presets", () => {
   it("should get a preset by id", () => {
     const neko = getPreset("neko");
     expect(neko).toBeTruthy();
-    expect(neko!.name).toBe("TORO 냥체");
+    expect(neko!.name).toBe("AI비서 TORO");
     expect(neko!.prompt).toContain("TORO");
   });
 
@@ -37,12 +37,10 @@ describe("prompt presets", () => {
     expect(prompt).toContain("TORO");
   });
 
-  it("should switch active preset", () => {
+  it("should keep active preset fixed to neko", () => {
     const result = setActivePreset("yeonnnn");
-    expect(result).toBe(true);
-    expect(getActivePresetId()).toBe("yeonnnn");
-    // Reset
-    setActivePreset("neko");
+    expect(result).toBe(false);
+    expect(getActivePresetId()).toBe("neko");
   });
 
   it("should fail to switch to nonexistent preset", () => {
