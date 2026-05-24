@@ -6,6 +6,9 @@ services:
       - "3000:3000"
     env_file:
       - .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:-file:/app/data/toro.db}
     volumes:
       - ./data:/app/data
 
