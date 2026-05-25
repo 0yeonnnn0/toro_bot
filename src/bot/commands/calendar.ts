@@ -8,7 +8,7 @@ function formatCalendarError(err: unknown): string {
   if (err instanceof TeamLoginRequiredError || err instanceof TeamSelectionRequiredError) return err.message;
   const msg = (err as Error).message || "";
   if (msg.includes("TOKEN_ENCRYPTION_KEY")) {
-    return "캘린더 OAuth 암호화 키가 아직 운영 서버에 설정되지 않았다냥. NAS의 /volume1/docker/toro-bot/.env에 TOKEN_ENCRYPTION_KEY를 넣고 컨테이너를 재시작해줘라냥.";
+    return "캘린더 OAuth 암호화 키를 만들거나 읽지 못했다냥. 기본값은 /app/data/token-encryption.key에 자동 생성되니 data 볼륨 권한을 확인해줘라냥.";
   }
   return msg || "캘린더 처리 중 문제가 생겼다냥.";
 }

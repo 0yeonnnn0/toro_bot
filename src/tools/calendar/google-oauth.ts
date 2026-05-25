@@ -1,10 +1,32 @@
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
+function keyFilePath(): string {
+  return process.env.TOKEN_ENCRYPTION_KEY_FILE || path.join(process.cwd(), "data", "token-encryption.key");
+}
+
+function readOrCreateKeyFile(): string | null {
+  const file = keyFilePath();
+  try {
+    if (fs.existsSync(file)) return fs.readFileSync(file, "utf8").trim();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const generated = crypto.randomBytes(32).toString("hex");
+    fs.writeFileSync(file, generated + "\n", { mode: 0o600 });
+    try { fs.chmodSync(file, 0o600); } catch { /* best effort */ }
+    console.warn(`[Calendar] Generated TOKEN_ENCRYPTION_KEY_FILE at ${file}`);
+    return generated;
+  } catch (err) {
+    console.warn(`[Calendar] Could not read/create TOKEN_ENCRYPTION_KEY_FILE: ${(err as Error).message}`);
+    return null;
+  }
+}
+
 function getKey(): Buffer {
-  const raw = process.env.TOKEN_ENCRYPTION_KEY || "";
-  if (!raw && process.env.NODE_ENV === "production") throw new Error("TOKEN_ENCRYPTION_KEY is required in production");
+  const raw = process.env.TOKEN_ENCRYPTION_KEY || (process.env.NODE_ENV === "production" ? readOrCreateKeyFile() || "" : "");
+  if (!raw && process.env.NODE_ENV === "production") throw new Error("TOKEN_ENCRYPTION_KEY is required in production and TOKEN_ENCRYPTION_KEY_FILE could not be created");
   if (raw.length === 32) return Buffer.from(raw);
   return crypto.createHash("sha256").update(raw || "dev-only-token-encryption-key").digest();
 }

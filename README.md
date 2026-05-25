@@ -168,7 +168,8 @@ cp .env.example .env
 | `EDGE_TTS_PYTHON` | Edge TTS 실행 Python. 기본 `python3` |
 | `OPENAI_TTS_MODEL` | `/say` OpenAI fallback TTS 모델. 기본 `gpt-4o-mini-tts` |
 | `ANTHROPIC_API_KEY` | Anthropic API 키 |
-| `TOKEN_ENCRYPTION_KEY` | OAuth token 암호화 키 |
+| `TOKEN_ENCRYPTION_KEY` | OAuth token 암호화 키. 없으면 production에서 `data/token-encryption.key`를 자동 생성 |
+| `TOKEN_ENCRYPTION_KEY_FILE` | 자동 생성/읽기할 OAuth 암호화 키 파일 경로. 기본 `./data/token-encryption.key` |
 | `GOOGLE_CLIENT_ID` | Google Calendar OAuth client id |
 | `GOOGLE_CLIENT_SECRET` | Google Calendar OAuth client secret |
 | `GOOGLE_REDIRECT_URI` | Google Calendar OAuth callback URL |
