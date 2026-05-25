@@ -9,6 +9,9 @@ vi.mock("../db/client", () => ({
     team: {
       findFirst: vi.fn(),
     },
+    activeTeamSelection: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 
@@ -78,11 +81,26 @@ describe("resolveTeamContext", () => {
     expect(result.member).toBe(membership);
   });
 
+  it("resolves active DM team when the user selected one", async () => {
+    const memberships = [
+      { teamId: "team_1", team: { id: "team_1", name: "One", slug: "one" } },
+      { teamId: "team_2", team: { id: "team_2", name: "Two", slug: "two" } },
+    ];
+    vi.mocked(prisma.teamMember.findMany).mockResolvedValue(memberships as never);
+    vi.mocked(prisma.activeTeamSelection.findUnique).mockResolvedValue({ discordUserId: "user_1", teamId: "team_2" } as never);
+
+    const result = await resolveTeamContext({ guildId: null, discordUserId: "user_1" });
+
+    expect(result.team.slug).toBe("two");
+    expect(result.member.teamId).toBe("team_2");
+  });
+
   it("throws selection required for DM when the user has multiple teams", async () => {
     vi.mocked(prisma.teamMember.findMany).mockResolvedValue([
-      { teamId: "team_1", team: { slug: "one" } },
-      { teamId: "team_2", team: { slug: "two" } },
+      { teamId: "team_1", team: { name: "One", slug: "one" } },
+      { teamId: "team_2", team: { name: "Two", slug: "two" } },
     ] as never);
+    vi.mocked(prisma.activeTeamSelection.findUnique).mockResolvedValue(null as never);
 
     await expect(resolveTeamContext({ guildId: null, discordUserId: "user_1" }))
       .rejects.toBeInstanceOf(TeamSelectionRequiredError);

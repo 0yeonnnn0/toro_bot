@@ -74,3 +74,14 @@ cat .env | grep -E '^(DATABASE_URL|DISCORD_TOKEN|DASHBOARD_SECRET|AI_PROVIDER|TO
 
 
 `/say`는 기본적으로 API key 없는 Edge TTS를 사용한다. `TORO_TTS_PROVIDER=openai`와 `OPENAI_API_KEY`를 설정하면 OpenAI TTS를 우선 사용할 수 있다.
+
+
+### Google Calendar OAuth URL
+
+운영에서는 `TORO_PUBLIC_URL=https://외부접속주소`를 설정하면 `GOOGLE_REDIRECT_URI`가 없을 때 `${TORO_PUBLIC_URL}/api/calendar/oauth/callback`을 자동 사용한다. Google Cloud Console에도 같은 callback URL을 등록해야 한다.
+
+
+### Media fallback behavior
+
+- `/draw` tries Codex CLI first and OpenAI image API second when `OPENAI_API_KEY` exists. If both are unavailable, it still returns a local SVG fallback card so the command does not hard-fail.
+- `/say` uses Python `edge-tts` by default, so it does not require `OPENAI_API_KEY`. OpenAI TTS is only used when explicitly configured or as a fallback with a key.

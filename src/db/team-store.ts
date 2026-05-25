@@ -80,6 +80,28 @@ export async function getTeamMembers(teamId: string) {
   });
 }
 
+export async function getMembershipForTeamSlug(discordUserId: string, teamSlug: string) {
+  return prisma.teamMember.findFirst({
+    where: { discordUserId, team: { slug: teamSlug } },
+    include: { team: true },
+  });
+}
+
+export async function setActiveTeamForUser(discordUserId: string, teamId: string) {
+  return prisma.activeTeamSelection.upsert({
+    where: { discordUserId },
+    create: { discordUserId, teamId },
+    update: { teamId },
+  });
+}
+
+export async function getActiveTeamForUser(discordUserId: string) {
+  return prisma.activeTeamSelection.findUnique({
+    where: { discordUserId },
+    include: { team: true },
+  });
+}
+
 export async function createTeamInvite(input: { teamId: string; createdById: string; code: string; expiresAt?: Date | null }) {
   return prisma.teamInvite.create({
     data: {

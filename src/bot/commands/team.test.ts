@@ -8,7 +8,9 @@ vi.mock("../../db/team-store", () => ({
   getMembershipsForUser: vi.fn(),
   getTeamByGuildId: vi.fn(),
   getTeamMembers: vi.fn(),
+  getMembershipForTeamSlug: vi.fn(),
   markInviteUsed: vi.fn(),
+  setActiveTeamForUser: vi.fn(),
 }));
 
 import {
@@ -16,9 +18,10 @@ import {
   handleLogin,
   handleTeamCreate,
   handleTeamInfo,
+  handleTeamSwitch,
   makeTeamSlug,
 } from "./team";
-import { createTeam, getMembershipsForUser, getTeamByGuildId } from "../../db/team-store";
+import { createTeam, getMembershipForTeamSlug, getMembershipsForUser, getTeamByGuildId, setActiveTeamForUser } from "../../db/team-store";
 
 function fakeInteraction(commandOptions: Record<string, string> = {}) {
   return {
@@ -95,6 +98,27 @@ describe("team commands", () => {
 
     expect(createTeam).not.toHaveBeenCalled();
     expect(interaction.reply).toHaveBeenCalledWith({ content: expect.stringContaining("이미 TORO 팀"), ephemeral: true });
+  });
+
+  it("/team switch stores active team for a joined slug", async () => {
+    vi.mocked(getMembershipForTeamSlug).mockResolvedValue({ teamId: "team_2", team: { name: "Beta", slug: "beta" } } as never);
+    const interaction = fakeInteraction({ team: "beta" });
+
+    await handleTeamSwitch(interaction);
+
+    expect(getMembershipForTeamSlug).toHaveBeenCalledWith("user_1", "beta");
+    expect(setActiveTeamForUser).toHaveBeenCalledWith("user_1", "team_2");
+    expect(interaction.reply).toHaveBeenCalledWith({ content: expect.stringContaining("Beta"), ephemeral: true });
+  });
+
+  it("/team switch rejects teams the user has not joined", async () => {
+    vi.mocked(getMembershipForTeamSlug).mockResolvedValue(null as never);
+    const interaction = fakeInteraction({ team: "missing" });
+
+    await handleTeamSwitch(interaction);
+
+    expect(setActiveTeamForUser).not.toHaveBeenCalled();
+    expect(interaction.reply).toHaveBeenCalledWith({ content: expect.stringContaining("찾지 못했다냥"), ephemeral: true });
   });
 
   it("/team info explains when the user has no teams", async () => {

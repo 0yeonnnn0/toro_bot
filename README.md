@@ -299,3 +299,14 @@ cd frontend && npm audit
 - Google Calendar OAuth callback URL은 Google Cloud Console에 등록된 redirect URI와 `.env`의 `GOOGLE_REDIRECT_URI`가 일치해야 한다.
 - `/api/calendar/oauth/callback`은 public endpoint지만, signed state와 팀 관리자 권한 검증을 통과해야 연결된다.
 - `/admin`과 `/api/stored/*`는 `DASHBOARD_SECRET` 기반 인증이 필요하다.
+
+
+### Google Calendar OAuth URL
+
+운영에서는 `TORO_PUBLIC_URL=https://외부접속주소`를 설정하면 `GOOGLE_REDIRECT_URI`가 없을 때 `${TORO_PUBLIC_URL}/api/calendar/oauth/callback`을 자동 사용한다. Google Cloud Console에도 같은 callback URL을 등록해야 한다.
+
+
+### Media fallback behavior
+
+- `/draw` tries Codex CLI first and OpenAI image API second when `OPENAI_API_KEY` exists. If both are unavailable, it still returns a local SVG fallback card so the command does not hard-fail.
+- `/say` uses Python `edge-tts` by default, so it does not require `OPENAI_API_KEY`. OpenAI TTS is only used when explicitly configured or as a fallback with a key.

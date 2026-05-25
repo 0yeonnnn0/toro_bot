@@ -4,6 +4,31 @@ import path from "path";
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
+function getPublicBaseUrl(): string {
+  const raw = process.env.TORO_PUBLIC_URL || process.env.PUBLIC_BASE_URL || process.env.DASHBOARD_PUBLIC_URL || "";
+  return raw.replace(/\/$/, "");
+}
+
+function getCalendarRedirectUri(): string {
+  if (process.env.GOOGLE_REDIRECT_URI) return process.env.GOOGLE_REDIRECT_URI;
+  const base = getPublicBaseUrl();
+  if (base) return `${base}/api/calendar/oauth/callback`;
+  return "http://localhost:3000/api/calendar/oauth/callback";
+}
+
+function requireGoogleOAuthConfig(): { clientId: string; clientSecret: string; redirectUri: string } {
+  const clientId = process.env.GOOGLE_CLIENT_ID || "";
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
+  const redirectUri = getCalendarRedirectUri();
+  if (!clientId || !clientSecret) {
+    throw new Error("Google Calendar OAuth 설정이 필요하다냥. GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET을 설정해줘라냥.");
+  }
+  if (process.env.NODE_ENV === "production" && redirectUri.includes("localhost")) {
+    throw new Error("Google Calendar OAuth callback URL이 localhost다냥. 운영에서는 TORO_PUBLIC_URL 또는 GOOGLE_REDIRECT_URI를 NAS 외부 HTTPS 주소로 설정해줘라냥.");
+  }
+  return { clientId, clientSecret, redirectUri };
+}
+
 function keyFilePath(): string {
   return process.env.TOKEN_ENCRYPTION_KEY_FILE || path.join(process.cwd(), "data", "token-encryption.key");
 }

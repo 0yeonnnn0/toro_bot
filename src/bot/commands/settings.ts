@@ -76,7 +76,7 @@ export async function handleStatus(interaction: ChatInputCommandInteraction): Pr
       { name: "Model", value: state.config.model, inline: true },
       { name: "Preset", value: preset?.name || presetId, inline: true },
       { name: "Queue", value: `${queue.activeCount}/${queue.maxConcurrent} active`, inline: true },
-      { name: "RAG Vectors", value: `${rag.vectorCount}`, inline: true },
+      { name: "RAG", value: rag.enabled ? `${rag.vectorCount} vectors` : "disabled (no Google key)", inline: true },
       { name: "Vault Notes", value: `${getVaultStats().userNotes}`, inline: true },
     ],
   };

@@ -54,9 +54,13 @@ setInterval(saveHits, 30000);
 // ── GenAI ──
 let genAI: GoogleGenerativeAI | null = null;
 
+export function isRagEnabled(): boolean {
+  return Boolean(state.config.googleApiKey || process.env.GOOGLE_API_KEY);
+}
+
 function getGenAI(): GoogleGenerativeAI {
   if (!genAI) {
-    genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY || "");
+    genAI = new GoogleGenerativeAI(state.config.googleApiKey || process.env.GOOGLE_API_KEY || "");
   }
   return genAI;
 }
@@ -82,6 +86,7 @@ export async function storeConversation(params: {
   messages: { content: string }[];
   timestamp: number;
 }): Promise<void> {
+  if (!isRagEnabled()) return;
   const text = params.messages.map((m) => m.content).join("\n");
   try {
     const vector = await getEmbedding(text);
@@ -100,6 +105,7 @@ export async function storeConversation(params: {
 }
 
 export async function searchRelevant(query: string, topK: number = 3): Promise<SearchResult[]> {
+  if (!isRagEnabled()) return [];
   try {
     if (!(await index.isIndexCreated())) return [];
     const vector = await getEmbedding(query);
@@ -137,13 +143,14 @@ export function formatContext(results: SearchResult[]): string {
   return `\n아래는 과거에 이 서버에서 나눈 대화야. 직접 인용하지 말고, 맥락을 이해하는 데 자연스럽게 활용해.\n${lines.join("\n")}`;
 }
 
-export async function getStats(): Promise<{ vectorCount: number; indexCreated: boolean }> {
+export async function getStats(): Promise<{ vectorCount: number; indexCreated: boolean; enabled: boolean }> {
+  const enabled = isRagEnabled();
   try {
-    if (!(await index.isIndexCreated())) return { vectorCount: 0, indexCreated: false };
+    if (!(await index.isIndexCreated())) return { vectorCount: 0, indexCreated: false, enabled };
     const items = await index.listItems();
-    return { vectorCount: items.length, indexCreated: true };
+    return { vectorCount: items.length, indexCreated: true, enabled };
   } catch {
-    return { vectorCount: 0, indexCreated: false };
+    return { vectorCount: 0, indexCreated: false, enabled };
   }
 }
 

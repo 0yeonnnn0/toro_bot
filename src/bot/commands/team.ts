@@ -7,7 +7,9 @@ import {
   getMembershipsForUser,
   getTeamByGuildId,
   getTeamMembers,
+  getMembershipForTeamSlug,
   markInviteUsed,
+  setActiveTeamForUser,
 } from "../../db/team-store";
 import { resolveTeamContext } from "../../team/context";
 import { TeamLoginRequiredError, TeamSelectionRequiredError } from "../../team/errors";
@@ -151,9 +153,23 @@ export async function handleTeamMembers(interaction: ChatInputCommandInteraction
 }
 
 export async function handleTeamSwitch(interaction: ChatInputCommandInteraction): Promise<void> {
-  const teamSlug = interaction.options.getString("team", true);
+  const teamSlug = interaction.options.getString("team", true).trim();
+  const membership = await getMembershipForTeamSlug(interaction.user.id, teamSlug);
+
+  if (!membership) {
+    await interaction.reply({
+      content: `가입한 팀 중 \`${teamSlug}\` 슬러그를 찾지 못했다냥. \`/team info\`로 팀 목록을 확인해줘라냥.`,
+      ephemeral: true,
+    });
+    return;
+  }
+
+  await setActiveTeamForUser(interaction.user.id, membership.teamId);
+  const guildNote = interaction.guildId
+    ? "\n참고로 서버 채널에서는 서버에 연결된 TORO 팀이 우선이고, 이 선택은 DM/다중 팀 문맥에 적용된다냥."
+    : "";
   await interaction.reply({
-    content: `팀 전환 요청은 받았다냥: \`${teamSlug}\`\nMVP에서는 서버 기본 팀을 우선 사용하고, DM 다중 팀 전환은 다음 단계에서 저장한다냥.`,
+    content: `앞으로 사용할 TORO 팀을 **${membership.team.name}** (\`${membership.team.slug}\`)로 선택했다냥.${guildNote}`,
     ephemeral: true,
   });
 }

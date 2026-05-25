@@ -101,9 +101,26 @@ export async function judgeAndReply(history: HistoryMessage[], ragContext: strin
   return reply;
 }
 
+function hasImageInput(history: HistoryMessage[]): boolean {
+  return history.some((msg) => Boolean(msg.imageData));
+}
+
+function hasGoogleApiKey(): boolean {
+  return Boolean(state.config.googleApiKey || process.env.GOOGLE_API_KEY);
+}
+
 export async function callAI(history: HistoryMessage[], prompt: string): Promise<string> {
-  const provider = state.config.aiProvider;
-  const model = state.config.model;
+  let provider = state.config.aiProvider;
+  let model = state.config.model;
+
+  // Codex CLI currently only receives text. If a Discord message contains an
+  // image and Google vision is configured, route that single request to Gemini
+  // vision instead of silently reducing the image to "[이미지 첨부]".
+  if (hasImageInput(history) && provider === "codex" && hasGoogleApiKey()) {
+    provider = "google";
+    model = fallbackModel();
+  }
+
   lastUsedModel = model;
 
   try {

@@ -10,6 +10,9 @@ function formatCalendarError(err: unknown): string {
   if (msg.includes("TOKEN_ENCRYPTION_KEY")) {
     return "캘린더 OAuth 암호화 키를 만들거나 읽지 못했다냥. 기본값은 /app/data/token-encryption.key에 자동 생성되니 data 볼륨 권한을 확인해줘라냥.";
   }
+  if (msg.includes("Google Calendar OAuth") || msg.includes("callback URL")) {
+    return msg;
+  }
   return msg || "캘린더 처리 중 문제가 생겼다냥.";
 }
 

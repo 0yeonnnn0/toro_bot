@@ -21,6 +21,7 @@ model Team {
   conversations Conversation[]
   memos         Memo[]
   calendar      TeamCalendarConnection?
+  activeSelections ActiveTeamSelection[]
 }
 
 model TeamMember {
@@ -35,6 +36,16 @@ model TeamMember {
 
   @@unique([teamId, discordUserId])
   @@index([discordUserId])
+}
+
+model ActiveTeamSelection {
+  discordUserId String @id
+  teamId        String
+  updatedAt     DateTime @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
 }
 
 model TeamInvite {

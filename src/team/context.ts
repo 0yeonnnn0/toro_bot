@@ -49,7 +49,13 @@ async function resolveDmTeamContext(discordUserId: string): Promise<TeamContext>
   }
 
   if (memberships.length > 1) {
-    throw new TeamSelectionRequiredError("가입한 TORO 팀이 여러 개다냥. 사용할 팀을 먼저 선택해줘라냥.");
+    const active = await prisma.activeTeamSelection.findUnique({ where: { discordUserId } });
+    if (active) {
+      const member = memberships.find((m) => m.teamId === active.teamId);
+      if (member) return { team: member.team, member };
+    }
+    const choices = memberships.map((m) => `- ${m.team.name} (\`${m.team.slug}\`)`).join("\n");
+    throw new TeamSelectionRequiredError(`가입한 TORO 팀이 여러 개다냥. \`/team switch team:<slug>\`로 사용할 팀을 선택해줘라냥.\n${choices}`);
   }
 
   const member = memberships[0];
