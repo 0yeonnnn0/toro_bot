@@ -13,7 +13,7 @@ export async function handleDraw(interaction: ChatInputCommandInteraction): Prom
   try {
     const result = await generateImage(prompt, quality);
     if (result) {
-      const label = result.usedModel === "pro" ? " (GPT high)" : " (GPT fast)";
+      const label = result.usedModel === "pro" ? ` (${result.provider} high)` : ` (${result.provider} fast)`;
       await interaction.editReply({
         content: `**${prompt}**${label}`,
         files: [result.attachment],

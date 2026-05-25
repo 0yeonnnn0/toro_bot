@@ -55,7 +55,7 @@ gh pr create --base develop        # develop으로 PR
 - `src/bot/history.ts` — per-channel message history (max 30), in-memory only
 - `src/bot/rag.ts` — vector search via vectra + Google `gemini-embedding-001`; stores conversation chunks, searches relevant context
 - `src/bot/vault.ts` — Obsidian vault integration; reads/writes user `.md` notes in `VAULT_PATH/TORO/users/`; AI-driven info extraction from conversations with `[[Obsidian links]]` for keywords
-- `src/bot/draw.ts` — Gemini image generation (flash/pro)
+- `src/bot/draw.ts` — Codex-first image generation for /draw, with OpenAI image API fallback
 - `src/bot/tts.ts` — Google TTS with 6 voice options
 - `src/bot/scrape.ts` — URL content extraction for AI context
 - `src/bot/queue.ts` — concurrent request limiter (max 3), per-user cooldown (3s), queue timeout (15s)
