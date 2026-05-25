@@ -69,3 +69,6 @@ cat .env | grep -E '^(DATABASE_URL|DISCORD_TOKEN|DASHBOARD_SECRET|AI_PROVIDER|TO
 주요 원인:
 - `DATABASE_URL`이 없는 기존 `.env`: 최신 Compose에서는 기본값을 넣어 방지한다.
 - 기존 DB에 같은 Discord `guildId` 팀이 중복됨: `Team.guildId` unique migration이 실패할 수 있다. 이 경우 중복 row를 정리한 뒤 다시 `docker compose up -d` 한다.
+
+
+`/say`는 기본적으로 API key 없는 Edge TTS를 사용한다. `TORO_TTS_PROVIDER=openai`와 `OPENAI_API_KEY`를 설정하면 OpenAI TTS를 우선 사용할 수 있다.

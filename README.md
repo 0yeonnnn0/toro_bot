@@ -52,7 +52,7 @@
 - `/draw quality:flash`는 빠른 초안, `quality:pro`는 고품질 요청으로 처리한다.
 
 ### 음성 답변 (TTS)
-- `/say`로 캐릭터 말투 답변과 음성 파일을 받는다.
+- `/say`로 캐릭터 말투 답변과 음성 파일을 받는다. 기본 TTS는 API key 없는 Edge TTS를 사용한다.
 
 ### 대화 요약
 - `/summary`로 최근 대화를 주제별로 정리한다.
@@ -160,10 +160,13 @@ cp .env.example .env
 | `CODEX_TIMEOUT_MS` | Codex CLI 호출 타임아웃. 기본 `180000` |
 | `GOOGLE_API_KEY` | Google AI API 키. Codex CLI 실패 시 Gemini fallback과 RAG embedding에 사용 |
 | `GOOGLE_MODEL` | Google fallback 모델. 기본 `gemini-3.1-flash-lite-preview` |
-| `OPENAI_API_KEY` | OpenAI API 키. `/say`, OpenAI API provider, `/draw` fallback에서 사용 |
+| `OPENAI_API_KEY` | OpenAI API 키. OpenAI API provider, `/draw` fallback, `/say` OpenAI fallback에서 사용 |
 | `OPENAI_MODEL` | OpenAI API 텍스트 모델. 기본 `gpt-4o` |
 | `OPENAI_IMAGE_MODEL` | `/draw` OpenAI API fallback 이미지 모델. 기본 `gpt-image-1.5` |
-| `OPENAI_TTS_MODEL` | `/say` GPT TTS 모델. 기본 `gpt-4o-mini-tts` |
+| `TORO_TTS_PROVIDER` | `/say` TTS provider. 기본 `edge`라 API key가 필요 없음. `openai`로 설정하면 OpenAI TTS 우선 |
+| `EDGE_TTS_VOICE` | Edge TTS 음성 override. 기본 한국어 `ko-KR-SunHiNeural` / `ko-KR-InJoonNeural` |
+| `EDGE_TTS_PYTHON` | Edge TTS 실행 Python. 기본 `python3` |
+| `OPENAI_TTS_MODEL` | `/say` OpenAI fallback TTS 모델. 기본 `gpt-4o-mini-tts` |
 | `ANTHROPIC_API_KEY` | Anthropic API 키 |
 | `TOKEN_ENCRYPTION_KEY` | OAuth token 암호화 키 |
 | `GOOGLE_CLIENT_ID` | Google Calendar OAuth client id |

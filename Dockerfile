@@ -19,7 +19,7 @@ RUN npx tsc
 # --- Production ---
 FROM node:22-alpine
 RUN apk add --no-cache ffmpeg python3 make g++ py3-pip curl \
-    && pip3 install --break-system-packages yt-dlp \
+    && pip3 install --break-system-packages yt-dlp edge-tts \
     && npm install -g @openai/codex
 WORKDIR /app
 ENV NODE_ENV=production
