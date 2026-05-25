@@ -10,6 +10,7 @@ import { state, addLog, addError, trackUser, trackKeywords } from "../shared/sta
 import { enqueue, markUserRequest } from "./queue";
 import { fetchUrlContext } from "./scrape";
 import { getUserContext, extractAndSave } from "./vault";
+import { isChannelMuted } from "./commands/mute";
 import type { ImageData } from "./history";
 
 // @이름 → <@유저ID> 변환
@@ -83,6 +84,10 @@ export function setupMessageHandler(client: Client): void {
 
     const isMentioned = message.mentions.has(client.user!);
     console.log(`[MSG] id=${message.id} mention=${isMentioned} channel=${channelName} author=${message.author.displayName} content="${cleanContent.slice(0, 30)}"`);
+    if (isMentioned && isChannelMuted(channelId)) {
+      console.log(`[MUTE] 멘션 응답 무시: channel=${channelName} id=${message.id}`);
+      return;
+    }
     const shouldLog = isMentioned;
 
     history.addMessage(channelId, {

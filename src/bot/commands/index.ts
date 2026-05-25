@@ -10,6 +10,7 @@ import { handleLogin, handleTeamCommand } from "./team";
 import { handleCalendarCommand } from "./calendar";
 import { handleDraw, handleSay } from "./media";
 import { handleMyInfo } from "./vault";
+import { handleMute, handleMuteStatus } from "./mute";
 import {
   handlePlay, handleSkip, handleStop, handlePause,
   handleQueueCmd, handleNowPlaying, handleVolume,
@@ -55,6 +56,12 @@ export async function handleInteraction(interaction: ChatInputCommandInteraction
       break;
     case "status":
       await handleStatus(interaction);
+      break;
+    case "mute":
+      await handleMute(interaction);
+      break;
+    case "mutestatus":
+      await handleMuteStatus(interaction);
       break;
     case "summary":
       await handleSummary(interaction);

@@ -85,6 +85,20 @@ export const commands = [
     .setDescription("봇 상태 확인"),
 
   new SlashCommandBuilder()
+    .setName("mute")
+    .setDescription("현재 채널에서 TORO 멘션 응답 잠시 끄기/다시 켜기")
+    .addIntegerOption(opt =>
+      opt.setName("minutes")
+        .setDescription("음소거 시간(분). 0 입력 시 해제")
+        .setMinValue(0)
+        .setMaxValue(1440)
+    ),
+
+  new SlashCommandBuilder()
+    .setName("mutestatus")
+    .setDescription("현재 채널 TORO 음소거 상태 확인"),
+
+  new SlashCommandBuilder()
     .setName("summary")
     .setDescription("최근 대화 AI 요약")
     .addIntegerOption(opt =>

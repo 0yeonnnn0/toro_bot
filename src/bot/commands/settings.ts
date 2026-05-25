@@ -43,7 +43,11 @@ export async function handleHelp(interaction: ChatInputCommandInteraction): Prom
       },
       {
         name: "⚙️ 설정",
-        value: "`/status` — 봇 상태 확인",
+        value: [
+          "`/status` — 봇 상태 확인",
+          "`/mute` — 현재 채널에서 TORO 멘션 응답 잠시 끄기/다시 켜기",
+          "`/mutestatus` — 현재 채널 음소거 상태 확인",
+        ].join("\n"),
       },
     ],
   };
