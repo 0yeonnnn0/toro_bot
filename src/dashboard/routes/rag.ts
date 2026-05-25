@@ -2,17 +2,21 @@ import { Router, Request, Response } from "express";
 import multer from "multer";
 import fs from "fs";
 import path from "path";
-import { getStats as getRagStats, listVectors, searchRelevant, storeConversation, initIndex } from "../../bot/rag";
+import { getStats as getRagStats, listVectors, searchRelevant, storeConversation, initIndex, testRag } from "../../bot/rag";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 const router = Router();
 
 router.get("/rag-stats", async (_req: Request, res: Response) => res.json(await getRagStats()));
 
-router.get("/rag/vectors", async (_req: Request, res: Response) => res.json(await listVectors()));
+router.get("/rag/vectors", async (req: Request, res: Response) => {
+  const teamId = req.query.teamId === undefined ? undefined : String(req.query.teamId || "") || null;
+  const limit = req.query.limit ? Number(req.query.limit) : undefined;
+  res.json(await listVectors({ teamId, limit }));
+});
 
 router.get("/rag/timeline", async (_req: Request, res: Response) => {
-  const vectors = await listVectors();
+  const vectors = await listVectors({ limit: 10000 });
   const byDate: Record<string, { date: string; stored: number; hits: number }> = {};
   for (const v of vectors) {
     const date = new Date(v.timestamp).toISOString().split("T")[0];
@@ -27,11 +31,17 @@ router.post("/rag/search", async (req: Request, res: Response) => {
   const { query } = req.body;
   if (!query) return res.status(400).json({ error: "query가 필요합니다" });
   try {
-    const results = await searchRelevant(query, 5);
+    const teamId = req.body.teamId === undefined ? undefined : (req.body.teamId || null);
+    const results = await searchRelevant(query, 5, { teamId });
     res.json(results);
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }
+});
+
+router.post("/rag/test", async (req: Request, res: Response) => {
+  const query = String(req.body?.query || "토로 RAG 테스트");
+  res.json(await testRag(query));
 });
 
 router.post("/rag/upload", upload.single("file"), async (req: Request, res: Response) => {
@@ -39,6 +49,7 @@ router.post("/rag/upload", upload.single("file"), async (req: Request, res: Resp
   try {
     const text = req.file.buffer.toString("utf-8");
     const filename = req.file.originalname || "unknown";
+    const teamId = req.body.teamId || null;
     const isMd = filename.endsWith(".md");
 
     if (isMd) {
@@ -74,6 +85,7 @@ router.post("/rag/upload", upload.single("file"), async (req: Request, res: Resp
       for (const chunk of chunks) {
         await storeConversation({
           channel: `note:${noteName}`,
+          teamId,
           messages: [{ content: chunk }],
           timestamp: Date.now(),
         });
@@ -100,7 +112,7 @@ router.post("/rag/upload", upload.single("file"), async (req: Request, res: Resp
       const chunkSize = 5;
       let stored = 0;
       for (let i = 0; i < messages.length; i += chunkSize) {
-        await storeConversation({ channel: "kakaotalk-import", messages: messages.slice(i, i + chunkSize), timestamp: Date.now() });
+        await storeConversation({ channel: "kakaotalk-import", teamId, messages: messages.slice(i, i + chunkSize), timestamp: Date.now() });
         stored++;
       }
 

@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { LocalIndex } from "vectra";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
 import { state } from "../shared/state";
 
 const DATA_DIR = path.join(__dirname, "../../data/vectors");
@@ -13,6 +14,7 @@ export interface SearchResult {
   id: string;
   text: string;
   channel: string;
+  teamId: string | null;
   timestamp: number;
   score: number;
 }
@@ -20,6 +22,7 @@ export interface SearchResult {
 export interface VectorItem {
   id: string;
   channel: string;
+  teamId: string | null;
   timestamp: number;
   text: string;
   messageCount: number;
@@ -51,24 +54,54 @@ function saveHits(): void {
 
 setInterval(saveHits, 30000);
 
-// ── GenAI ──
+// ── Embeddings ──
 let genAI: GoogleGenerativeAI | null = null;
+let openai: OpenAI | null = null;
+
+type EmbeddingProvider = "google" | "openai";
+
+function embeddingProvider(): EmbeddingProvider {
+  return (state.config.embeddingProvider || process.env.EMBEDDING_PROVIDER || "google") as EmbeddingProvider;
+}
+
+function googleKey(): string {
+  return state.config.googleApiKey || process.env.GOOGLE_API_KEY || "";
+}
+
+function openAIKey(): string {
+  return state.config.openaiApiKey || process.env.OPENAI_API_KEY || "";
+}
 
 export function isRagEnabled(): boolean {
-  return Boolean(state.config.googleApiKey || process.env.GOOGLE_API_KEY);
+  const provider = embeddingProvider();
+  if (provider === "openai") return Boolean(openAIKey());
+  return Boolean(googleKey());
+}
+
+export function getRagProviderInfo(): { provider: EmbeddingProvider; model: string; enabled: boolean } {
+  const provider = embeddingProvider();
+  const model = state.config.embeddingModel || process.env.EMBEDDING_MODEL || (provider === "openai" ? "text-embedding-3-small" : "gemini-embedding-001");
+  return { provider, model, enabled: isRagEnabled() };
 }
 
 function getGenAI(): GoogleGenerativeAI {
-  if (!genAI) {
-    genAI = new GoogleGenerativeAI(state.config.googleApiKey || process.env.GOOGLE_API_KEY || "");
-  }
+  if (!genAI) genAI = new GoogleGenerativeAI(googleKey());
   return genAI;
 }
 
+function getOpenAI(): OpenAI {
+  if (!openai) openai = new OpenAI({ apiKey: openAIKey() });
+  return openai;
+}
+
 async function getEmbedding(text: string): Promise<number[]> {
-  const embeddingModel = state.config.embeddingModel || "gemini-embedding-001";
-  const model = getGenAI().getGenerativeModel({ model: embeddingModel });
-  const result = await model.embedContent(text);
+  const { provider, model } = getRagProviderInfo();
+  if (provider === "openai") {
+    const result = await getOpenAI().embeddings.create({ model, input: text });
+    return result.data[0].embedding;
+  }
+  const gemini = getGenAI().getGenerativeModel({ model });
+  const result = await gemini.embedContent(text);
   return result.embedding.values;
 }
 
@@ -85,6 +118,7 @@ export async function storeConversation(params: {
   channel: string;
   messages: { content: string }[];
   timestamp: number;
+  teamId?: string | null;
 }): Promise<void> {
   if (!isRagEnabled()) return;
   const text = params.messages.map((m) => m.content).join("\n");
@@ -94,6 +128,7 @@ export async function storeConversation(params: {
       vector,
       metadata: {
         channel: params.channel,
+        teamId: params.teamId ?? "",
         timestamp: params.timestamp,
         text,
         messageCount: params.messages.length,
@@ -104,14 +139,17 @@ export async function storeConversation(params: {
   }
 }
 
-export async function searchRelevant(query: string, topK: number = 3): Promise<SearchResult[]> {
+export async function searchRelevant(query: string, topK: number = 3, options: { teamId?: string | null } = {}): Promise<SearchResult[]> {
   if (!isRagEnabled()) return [];
   try {
     if (!(await index.isIndexCreated())) return [];
     const vector = await getEmbedding(query);
-    const results = await (index as any).queryItems(vector, topK) as any[];
+    const results = await (index as any).queryItems(vector, Math.max(topK * 8, topK)) as any[];
 
-    const filtered = results.filter((r: any) => r.score > 0.5);
+    const filtered = results
+      .filter((r: any) => options.teamId === undefined || ((r.item.metadata.teamId as string) || null) === options.teamId)
+      .filter((r: any) => r.score > 0.5)
+      .slice(0, topK);
 
     for (const r of filtered) {
       const id = r.item.id || String(r.item.metadata.timestamp);
@@ -124,6 +162,7 @@ export async function searchRelevant(query: string, topK: number = 3): Promise<S
       id: r.item.id,
       text: r.item.metadata.text,
       channel: r.item.metadata.channel,
+      teamId: (r.item.metadata.teamId as string) || null,
       timestamp: r.item.metadata.timestamp,
       score: r.score,
     }));
@@ -143,31 +182,52 @@ export function formatContext(results: SearchResult[]): string {
   return `\n아래는 과거에 이 서버에서 나눈 대화야. 직접 인용하지 말고, 맥락을 이해하는 데 자연스럽게 활용해.\n${lines.join("\n")}`;
 }
 
-export async function getStats(): Promise<{ vectorCount: number; indexCreated: boolean; enabled: boolean }> {
-  const enabled = isRagEnabled();
+export async function getStats(): Promise<{ vectorCount: number; indexCreated: boolean; enabled: boolean; provider: string; model: string; teams: Record<string, number> }> {
+  const info = getRagProviderInfo();
   try {
-    if (!(await index.isIndexCreated())) return { vectorCount: 0, indexCreated: false, enabled };
+    if (!(await index.isIndexCreated())) return { vectorCount: 0, indexCreated: false, enabled: info.enabled, provider: info.provider, model: info.model, teams: {} };
     const items = await index.listItems();
-    return { vectorCount: items.length, indexCreated: true, enabled };
+    const teams: Record<string, number> = {};
+    for (const item of items as any[]) {
+      const key = (item.metadata.teamId as string) || "global";
+      teams[key] = (teams[key] || 0) + 1;
+    }
+    return { vectorCount: items.length, indexCreated: true, enabled: info.enabled, provider: info.provider, model: info.model, teams };
   } catch {
-    return { vectorCount: 0, indexCreated: false, enabled };
+    return { vectorCount: 0, indexCreated: false, enabled: info.enabled, provider: info.provider, model: info.model, teams: {} };
   }
 }
 
-export async function listVectors(): Promise<VectorItem[]> {
+export async function listVectors(options: { teamId?: string | null; limit?: number } = {}): Promise<VectorItem[]> {
   try {
     if (!(await index.isIndexCreated())) return [];
     const items = await index.listItems();
-    return items.map((item: any) => ({
-      id: item.id,
-      channel: item.metadata.channel,
-      timestamp: item.metadata.timestamp,
-      text: item.metadata.text,
-      messageCount: item.metadata.messageCount,
-      hits: hitCounts[item.id]?.count || 0,
-      lastHit: hitCounts[item.id]?.lastHit || null,
-    }));
+    return (items as any[])
+      .filter((item) => options.teamId === undefined || ((item.metadata.teamId as string) || null) === options.teamId)
+      .map((item: any) => ({
+        id: item.id,
+        channel: item.metadata.channel,
+        teamId: (item.metadata.teamId as string) || null,
+        timestamp: item.metadata.timestamp,
+        text: item.metadata.text,
+        messageCount: item.metadata.messageCount,
+        hits: hitCounts[item.id]?.count || 0,
+        lastHit: hitCounts[item.id]?.lastHit || null,
+      }))
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, options.limit ?? 200);
   } catch {
     return [];
+  }
+}
+
+export async function testRag(query = "토로 RAG 테스트"): Promise<{ ok: boolean; error?: string; vectorLength?: number; results?: SearchResult[] }> {
+  if (!isRagEnabled()) return { ok: false, error: `${embeddingProvider()} embedding key is not configured` };
+  try {
+    const vector = await getEmbedding(query);
+    const results = await searchRelevant(query, 3);
+    return { ok: true, vectorLength: vector.length, results };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
   }
 }

@@ -61,6 +61,7 @@ export interface Config {
   // 대화 수집
   passiveLogging: boolean;  // 멘션 아닌 메시지도 로그/RAG/통계 수집
   // 임베딩 모델
+  embeddingProvider: "google" | "openai";
   embeddingModel: string;
   // API 키 (웹에서 관리, .env fallback)
   googleApiKey?: string;
@@ -118,10 +119,12 @@ export const state: State = {
     webSystemPrompt: saved?.config?.webSystemPrompt ?? "",
     imageRecognition: saved?.config?.imageRecognition ?? true,
     passiveLogging: saved?.config?.passiveLogging ?? true,
+    embeddingProvider: (saved?.config?.embeddingProvider as "google" | "openai" | undefined) ?? (process.env.EMBEDDING_PROVIDER as "google" | "openai" | undefined) ?? "google",
     embeddingModel: (() => {
       const m = saved?.config?.embeddingModel;
-      if (!m || m === "text-embedding-004") return "gemini-embedding-001";
-      return m;
+      if (m && m !== "text-embedding-004") return m;
+      const provider = (saved?.config?.embeddingProvider as "google" | "openai" | undefined) ?? (process.env.EMBEDDING_PROVIDER as "google" | "openai" | undefined) ?? "google";
+      return process.env.EMBEDDING_MODEL || (provider === "openai" ? "text-embedding-3-small" : "gemini-embedding-001");
     })(),
     googleApiKey: saved?.config?.googleApiKey ?? (process.env.GOOGLE_API_KEY || ""),
     openaiApiKey: saved?.config?.openaiApiKey ?? (process.env.OPENAI_API_KEY || ""),

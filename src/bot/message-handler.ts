@@ -164,10 +164,16 @@ export function setupMessageHandler(client: Client): void {
           throw err;
         }
         await appendConversationMessage({ teamId: teamContext.team.id, guildId: message.guildId, channelId, role: "user", content: `${message.author.displayName}: ${cleanContent}${imageData ? " [이미지 첨부]" : ""}`, discordUserId: message.author.id, displayName: message.author.displayName, discordMessageId: message.id });
+        rag.storeConversation({
+          teamId: teamContext.team.id,
+          channel: channelName,
+          messages: [{ content: `${message.author.displayName}: ${cleanContent}${imageData ? " [이미지 첨부]" : ""}` }],
+          timestamp: Date.now(),
+        });
         const teamHistory = await getRecentConversationHistory({ teamId: teamContext.team.id, guildId: message.guildId, channelId });
         let ragResults: any[] = [];
         try {
-          ragResults = await rag.searchRelevant(cleanContent);
+          ragResults = await rag.searchRelevant(cleanContent, 3, { teamId: teamContext.team.id });
         } catch {}
         ragHitCount = ragResults.length;
         const urlContext = await fetchUrlContext(cleanContent);

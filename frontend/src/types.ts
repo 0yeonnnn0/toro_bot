@@ -77,11 +77,16 @@ export interface Preset extends PresetInfo {
 export interface RagStats {
   vectorCount: number;
   indexCreated: boolean;
+  enabled: boolean;
+  provider: string;
+  model: string;
+  teams: Record<string, number>;
 }
 
 export interface RagVector {
   id: string;
   channel: string;
+  teamId: string | null;
   timestamp: number;
   text: string;
   messageCount: number;
@@ -93,6 +98,7 @@ export interface SearchResult {
   id: string;
   text: string;
   channel: string;
+  teamId: string | null;
   timestamp: number;
   score: number;
 }
