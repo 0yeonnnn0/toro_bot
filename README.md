@@ -47,10 +47,9 @@
 
 ### AI 이미지 생성
 - `/draw`로 텍스트 프롬프트를 이미지로 생성한다.
-- Google image-capable Gemini 모델을 사용한다.
-- 기본값:
-  - `GOOGLE_IMAGE_MODEL_FLASH=gemini-2.5-flash-image-preview`
-  - `GOOGLE_IMAGE_MODEL_PRO=gemini-2.5-flash-image-preview`
+- OpenAI GPT image 모델을 사용한다.
+- 기본값: `OPENAI_IMAGE_MODEL=gpt-image-1.5`
+- `/draw quality:flash`는 low 품질, `quality:pro`는 high 품질로 생성한다.
 - `.env`에서 모델명을 바꿀 수 있다.
 
 ### 음성 답변 (TTS)
@@ -126,7 +125,7 @@
 | Frontend | React 19 + Vite |
 | Discord | discord.js v14 |
 | DB/ORM | SQLite + Prisma |
-| AI | Google Gemini / OpenAI GPT / Anthropic Claude |
+| AI | Codex CLI main / Gemini fallback / OpenAI GPT / Anthropic Claude |
 | 벡터 검색 | Vectra |
 | 음악 | @discordjs/voice + yt-dlp + FFmpeg |
 | 유저 기억 | Obsidian 볼트 (.md 파일) |
@@ -160,12 +159,12 @@ cp .env.example .env
 | `CODEX_HOME_HOST` | 호스트에서 마운트할 Codex CLI 로그인 캐시 경로. 기본 `./codex` |
 | `CODEX_MODEL` | Codex CLI 모델. 기본 `codex-cli-default`이면 CLI 설정 기본 모델 사용 |
 | `CODEX_TIMEOUT_MS` | Codex CLI 호출 타임아웃. 기본 `180000` |
-| `GOOGLE_API_KEY` | Google AI API 키. Codex CLI 실패 시 Gemini fallback에도 사용 |
-| `GOOGLE_MODEL` | Google 텍스트/fallback 모델. 기본 `gemini-3.1-flash-lite-preview` |
-| `GOOGLE_IMAGE_MODEL_FLASH` | `/draw` Flash 이미지 모델 |
-| `GOOGLE_IMAGE_MODEL_PRO` | `/draw` Pro 이미지 모델 |
-| `OPENAI_API_KEY` | OpenAI API provider 사용 시 API 키. Codex CLI provider와 별개 |
+| `GOOGLE_API_KEY` | Google AI API 키. Codex CLI 실패 시 Gemini fallback과 RAG embedding에 사용 |
+| `GOOGLE_MODEL` | Google fallback 모델. 기본 `gemini-3.1-flash-lite-preview` |
+| `OPENAI_API_KEY` | OpenAI API 키. `/draw`와 `/say`, OpenAI API provider에서 사용 |
 | `OPENAI_MODEL` | OpenAI API 텍스트 모델. 기본 `gpt-4o` |
+| `OPENAI_IMAGE_MODEL` | `/draw` GPT 이미지 모델. 기본 `gpt-image-1.5` |
+| `OPENAI_TTS_MODEL` | `/say` GPT TTS 모델. 기본 `gpt-4o-mini-tts` |
 | `ANTHROPIC_API_KEY` | Anthropic API 키 |
 | `TOKEN_ENCRYPTION_KEY` | OAuth token 암호화 키 |
 | `GOOGLE_CLIENT_ID` | Google Calendar OAuth client id |

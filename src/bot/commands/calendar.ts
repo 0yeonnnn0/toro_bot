@@ -6,7 +6,11 @@ import { deleteCalendarConnection } from "../../tools/calendar/calendar-store";
 
 function formatCalendarError(err: unknown): string {
   if (err instanceof TeamLoginRequiredError || err instanceof TeamSelectionRequiredError) return err.message;
-  return (err as Error).message || "캘린더 처리 중 문제가 생겼다냥.";
+  const msg = (err as Error).message || "";
+  if (msg.includes("TOKEN_ENCRYPTION_KEY")) {
+    return "캘린더 OAuth 암호화 키가 아직 운영 서버에 설정되지 않았다냥. NAS의 /volume1/docker/toro-bot/.env에 TOKEN_ENCRYPTION_KEY를 넣고 컨테이너를 재시작해줘라냥.";
+  }
+  return msg || "캘린더 처리 중 문제가 생겼다냥.";
 }
 
 export async function handleCalendarCommand(interaction: ChatInputCommandInteraction): Promise<void> {

@@ -114,8 +114,8 @@ export const commands = [
     .addStringOption(opt =>
       opt.setName("quality").setDescription("모델 품질")
         .addChoices(
-          { name: "Flash (빠름)", value: "flash" },
-          { name: "Pro (고품질)", value: "pro" },
+          { name: "GPT Fast (빠름)", value: "flash" },
+          { name: "GPT High (고품질)", value: "pro" },
         )
     ),
 
