@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../../team/context", () => ({
+  resolveTeamContext: vi.fn(),
+}));
+
 vi.mock("../../db/team-store", () => ({
   addTeamMember: vi.fn(),
   createTeam: vi.fn(),
@@ -9,7 +13,6 @@ vi.mock("../../db/team-store", () => ({
   getTeamByGuildId: vi.fn(),
   getTeamMembers: vi.fn(),
   getMembershipForTeamSlug: vi.fn(),
-  markInviteUsed: vi.fn(),
   setActiveTeamForUser: vi.fn(),
 }));
 
@@ -18,10 +21,14 @@ import {
   handleLogin,
   handleTeamCreate,
   handleTeamInfo,
+  handleTeamInvite,
+  handleTeamJoin,
+  handleTeamMembers,
   handleTeamSwitch,
   makeTeamSlug,
 } from "./team";
-import { createTeam, getMembershipForTeamSlug, getMembershipsForUser, getTeamByGuildId, setActiveTeamForUser } from "../../db/team-store";
+import { addTeamMember, createTeam, createTeamInvite, getInviteByCode, getMembershipForTeamSlug, getMembershipsForUser, getTeamByGuildId, getTeamMembers, setActiveTeamForUser } from "../../db/team-store";
+import { resolveTeamContext } from "../../team/context";
 
 function fakeInteraction(commandOptions: Record<string, string> = {}) {
   return {
@@ -42,6 +49,10 @@ function fakeInteraction(commandOptions: Record<string, string> = {}) {
 describe("team commands", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(resolveTeamContext).mockResolvedValue({
+      team: { id: "team_1", name: "Alpha", slug: "alpha" },
+      member: { role: "OWNER" },
+    } as never);
   });
 
   it("creates URL-safe team slugs from Korean and English names", () => {
@@ -98,6 +109,46 @@ describe("team commands", () => {
 
     expect(createTeam).not.toHaveBeenCalled();
     expect(interaction.reply).toHaveBeenCalledWith({ content: expect.stringContaining("이미 TORO 팀"), ephemeral: true });
+  });
+
+
+  it("/team invite creates a public 1-hour reusable invite", async () => {
+    vi.mocked(createTeamInvite).mockResolvedValue({ code: "ABCDEFGH" } as never);
+    const interaction = fakeInteraction();
+
+    await handleTeamInvite(interaction);
+
+    expect(createTeamInvite).toHaveBeenCalledWith(expect.objectContaining({
+      teamId: "team_1",
+      createdById: "user_1",
+      code: expect.any(String),
+      expiresAt: expect.any(Date),
+    }));
+    const expiresAt = vi.mocked(createTeamInvite).mock.calls[0][0].expiresAt!;
+    expect(expiresAt.getTime()).toBeGreaterThan(Date.now() + 55 * 60 * 1000);
+    expect(interaction.reply).toHaveBeenCalledWith({ content: expect.stringContaining("여러 명"), ephemeral: false });
+  });
+
+  it("/team join accepts an unexpired reusable invite publicly", async () => {
+    vi.mocked(getInviteByCode).mockResolvedValue({ id: "invite_1", teamId: "team_1", expiresAt: new Date(Date.now() + 3600000), team: { name: "Alpha" } } as never);
+    vi.mocked(addTeamMember).mockResolvedValue({ role: "MEMBER" } as never);
+    const interaction = fakeInteraction({ code: "abcdefgh" });
+
+    await handleTeamJoin(interaction);
+
+    expect(getInviteByCode).toHaveBeenCalledWith("ABCDEFGH");
+    expect(addTeamMember).toHaveBeenCalledWith({ teamId: "team_1", discordUserId: "user_1", displayName: "Owner" });
+    expect(interaction.reply).toHaveBeenCalledWith({ content: expect.stringContaining("Alpha"), ephemeral: false });
+  });
+
+  it("/team members replies publicly", async () => {
+    vi.mocked(getTeamMembers).mockResolvedValue([{ displayName: "Owner", role: "OWNER" }] as never);
+    const interaction = fakeInteraction();
+
+    await handleTeamMembers(interaction);
+
+    expect(getTeamMembers).toHaveBeenCalledWith("team_1");
+    expect(interaction.reply).toHaveBeenCalledWith({ content: expect.stringContaining("Owner"), ephemeral: false });
   });
 
   it("/team switch stores active team for a joined slug", async () => {

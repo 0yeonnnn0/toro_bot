@@ -8,13 +8,13 @@ import {
   getTeamByGuildId,
   getTeamMembers,
   getMembershipForTeamSlug,
-  markInviteUsed,
   setActiveTeamForUser,
 } from "../../db/team-store";
 import { resolveTeamContext } from "../../team/context";
 import { TeamLoginRequiredError, TeamSelectionRequiredError } from "../../team/errors";
 
 const INVITE_CODE_LENGTH = 8;
+const INVITE_TTL_MS = 60 * 60 * 1000;
 
 export function makeTeamSlug(name: string): string {
   const slug = name
@@ -89,7 +89,7 @@ export async function handleTeamInvite(interaction: ChatInputCommandInteraction)
     });
 
     if (member.role !== "OWNER" && member.role !== "ADMIN") {
-      await interaction.reply({ content: "팀 초대 코드는 OWNER/ADMIN만 만들 수 있다냥.", ephemeral: true });
+      await interaction.reply({ content: "팀 초대 코드는 OWNER/ADMIN만 만들 수 있다냥.", ephemeral: false });
       return;
     }
 
@@ -97,14 +97,19 @@ export async function handleTeamInvite(interaction: ChatInputCommandInteraction)
       teamId: team.id,
       createdById: interaction.user.id,
       code: makeInviteCode(),
+      expiresAt: new Date(Date.now() + INVITE_TTL_MS),
     });
 
     await interaction.reply({
-      content: `팀 **${team.name}** 초대 코드다냥: \`${invite.code}\`\n가입은 \`/team join code:${invite.code}\` 로 하면 된다냥.`,
-      ephemeral: true,
+      content: [
+        `팀 **${team.name}** 초대 코드다냥: \`${invite.code}\``,
+        "이 코드는 1시간 동안 여러 명이 사용할 수 있다냥.",
+        `가입은 \`/team join code:${invite.code}\` 로 하면 된다냥.`,
+      ].join("\n"),
+      ephemeral: false,
     });
   } catch (err) {
-    await interaction.reply({ content: formatTeamError(err), ephemeral: true });
+    await interaction.reply({ content: formatTeamError(err), ephemeral: false });
   }
 }
 
@@ -112,8 +117,8 @@ export async function handleTeamJoin(interaction: ChatInputCommandInteraction): 
   const code = interaction.options.getString("code", true).trim().toUpperCase();
   const invite = await getInviteByCode(code);
 
-  if (!invite || invite.usedAt || (invite.expiresAt && invite.expiresAt.getTime() < Date.now())) {
-    await interaction.reply({ content: "유효하지 않거나 만료된 초대 코드다냥.", ephemeral: true });
+  if (!invite || (invite.expiresAt && invite.expiresAt.getTime() < Date.now())) {
+    await interaction.reply({ content: "유효하지 않거나 만료된 초대 코드다냥.", ephemeral: false });
     return;
   }
 
@@ -122,11 +127,10 @@ export async function handleTeamJoin(interaction: ChatInputCommandInteraction): 
     discordUserId: interaction.user.id,
     displayName: interaction.user.displayName,
   });
-  await markInviteUsed(invite.id);
 
   await interaction.reply({
     content: `팀 **${invite.team.name}** 에 ${member.role}로 가입했다냥.`,
-    ephemeral: true,
+    ephemeral: false,
   });
 }
 
@@ -146,9 +150,9 @@ export async function handleTeamMembers(interaction: ChatInputCommandInteraction
     const { team } = await resolveTeamContext({ guildId: interaction.guildId, discordUserId: interaction.user.id });
     const members = await getTeamMembers(team.id);
     const lines = members.map((m) => `- ${m.displayName} (${m.role})`);
-    await interaction.reply({ content: `**${team.name}** 멤버다냥:\n${lines.join("\n")}`, ephemeral: true });
+    await interaction.reply({ content: `**${team.name}** 멤버다냥:\n${lines.join("\n")}`, ephemeral: false });
   } catch (err) {
-    await interaction.reply({ content: formatTeamError(err), ephemeral: true });
+    await interaction.reply({ content: formatTeamError(err), ephemeral: false });
   }
 }
 
