@@ -15,6 +15,18 @@ SQLite DB는 `./data:/app/data` 볼륨에 저장된다. Compose 파일은 `DATAB
 채팅 기본 AI는 OpenAI API 키가 아니라 Codex CLI 연결을 사용한다. 컨테이너는 `CODEX_HOME=/codex`를 읽고, compose는 호스트의 `${CODEX_HOME_HOST:-./codex}`를 `/codex`로 마운트한다. NAS에서는 Codex CLI 로그인을 한 뒤 `auth.json`/`config.toml`을 `/volume1/docker/toro-bot/codex/` 아래에 두거나, `.env`에 `CODEX_HOME_HOST=/path/to/.codex`를 지정한다. Codex CLI가 세션 토큰을 갱신할 수 있어야 하므로 이 마운트는 read-write다. `GOOGLE_API_KEY`는 Codex 실패 시 Gemini fallback과 RAG용으로만 유지한다. `/draw`는 Codex CLI/ChatGPT 로그인 세션을 우선 사용하고, `OPENAI_API_KEY`가 있으면 OpenAI image API를 fallback으로 사용한다.
 
 
+## Discord 권한과 멘션 맥락
+
+TORO는 기본적으로 일반 대화에 자동으로 끼어들지 않고, `@TORO` 멘션 또는 명령어에 응답한다. 멘션 답변 시 현재 채널/스레드의 최근 2시간 메시지를 우선 사용하며, 2시간 안의 메시지가 50개 미만이면 최근 50개까지 거슬러 올라간다.
+
+운영 봇에는 다음 권한이 필요하다.
+
+- Discord Developer Portal에서 `Message Content Intent` 활성화
+- 서버/채널 권한: `View Channel`, `Read Message History`, `Send Messages`
+- 스레드 권한: `Send Messages in Threads`, `Read Message History`
+
+URL이 포함된 메시지는 페이지 내용을 읽고, 검색/최신/뉴스/가격/추천/비교/어떻게 생각 등 최신 정보가 필요해 보이는 멘션은 웹 검색 결과를 추가 맥락으로 붙인다. 웹 검색은 외부 검색 HTML 표면을 쓰므로 실패해도 답변 자체는 RAG/대화 맥락만으로 계속 진행한다.
+
 ## NAS 영구 이름 전환: discord-bot → toro-bot
 
 기존 NAS 배포가 아직 `/volume1/docker/discord-bot`, service/container `discord-bot` 이름을 쓰고 있다면 임시로 image만 바꾸지 말고 한 번에 영구 전환한다.

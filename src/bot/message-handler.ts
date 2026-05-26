@@ -8,7 +8,8 @@ import * as history from "./history";
 import * as rag from "./rag";
 import { state, addLog, addError, trackUser, trackKeywords } from "../shared/state";
 import { enqueue, markUserRequest } from "./queue";
-import { fetchUrlContext } from "./scrape";
+import { fetchUrlContext, fetchWebSearchContext } from "./scrape";
+import { getMentionContextHistory } from "./channel-context";
 import { getUserContext, extractAndSave } from "./vault";
 import { isChannelMuted } from "./commands/mute";
 import type { ImageData } from "./history";
@@ -170,15 +171,19 @@ export function setupMessageHandler(client: Client): void {
           messages: [{ content: `${message.author.displayName}: ${cleanContent}${imageData ? " [이미지 첨부]" : ""}` }],
           timestamp: Date.now(),
         });
-        const teamHistory = await getRecentConversationHistory({ teamId: teamContext.team.id, guildId: message.guildId, channelId });
+        let teamHistory = await getMentionContextHistory(message, cleanContent, imageData, client.user?.id);
+        if (teamHistory.length === 0) {
+          teamHistory = await getRecentConversationHistory({ teamId: teamContext.team.id, guildId: message.guildId, channelId });
+        }
         let ragResults: any[] = [];
         try {
           ragResults = await rag.searchRelevant(cleanContent, 3, { teamId: teamContext.team.id });
         } catch {}
         ragHitCount = ragResults.length;
         const urlContext = await fetchUrlContext(cleanContent);
+        const webSearchContext = await fetchWebSearchContext(cleanContent);
         const vaultContext = getUserContext(message.author.displayName);
-        const ragContext = rag.formatContext(ragResults) + urlContext + vaultContext;
+        const ragContext = rag.formatContext(ragResults) + urlContext + webSearchContext + vaultContext;
         const mentionIds = [...message.mentions.users.keys()].filter((id) => id !== client.user?.id);
         const routedReply = await routeToroMessage({ teamContext, content: cleanContent, mentions: mentionIds, history: teamHistory, source: { guildId: message.guildId, channelId, messageId: message.id }, chat: (conversationHistory) => getReply(conversationHistory, ragContext, message.author.id) });
         await appendConversationMessage({ teamId: teamContext.team.id, guildId: message.guildId, channelId, role: "assistant", content: routedReply });
