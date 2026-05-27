@@ -15,7 +15,27 @@ function getOpenAI(): OpenAI {
 }
 
 export type ImageModel = "flash" | "pro";
-export type ImageProvider = "codex" | "openai" | "local";
+export type ImageProvider = "codex" | "openai";
+
+const IMAGE_REQUEST_RE = /(그림|이미지|일러스트|사진|짤|캐릭터|프로필|배경화면|포스터|로고).*(그려|그리|만들|생성|뽑|제작|draw|generate|create)|(그려줘|그려 줄래|draw me|make me an image|generate an image)/i;
+const VECTOR_OR_CODE_RE = /(svg|벡터|vector|html|코드|마크업|다이어그램|diagram|mermaid|ascii|아스키)/i;
+
+export function isImageGenerationRequest(text: string): boolean {
+  const normalized = text.trim();
+  if (!normalized) return false;
+  if (VECTOR_OR_CODE_RE.test(normalized)) return false;
+  return IMAGE_REQUEST_RE.test(normalized);
+}
+
+export function extractImagePrompt(text: string): string {
+  return text
+    .replace(/<@!?\d+>/g, " ")
+    .replace(/^(토로야|토로|toro)[,\s:]*/i, "")
+    .replace(/(그림|이미지|일러스트|사진|짤)\s*(좀|하나|한 장)?\s*(그려줘|그려|만들어줘|만들어|생성해줘|생성해|뽑아줘|제작해줘)/gi, "")
+    .replace(/(그려줘|만들어줘|생성해줘|draw|generate|create)/gi, "")
+    .replace(/\s+/g, " ")
+    .trim() || text.trim();
+}
 
 function imageModelName(): string {
   return process.env.OPENAI_IMAGE_MODEL || "gpt-image-1.5";
@@ -95,61 +115,6 @@ async function tryGenerateWithCodex(prompt: string, quality: ImageModel): Promis
 }
 
 
-function escapeSvg(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function wrapText(text: string, max = 28): string[] {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    const next = current ? `${current} ${word}` : word;
-    if (next.length > max && current) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = next;
-    }
-    if (lines.length >= 5) break;
-  }
-  if (current && lines.length < 6) lines.push(current);
-  return lines.length ? lines : ["TORO draw"];
-}
-
-function generateLocalFallback(prompt: string, quality: ImageModel): AttachmentBuilder {
-  const title = quality === "pro" ? "TORO high fallback" : "TORO fast fallback";
-  const lines = wrapText(prompt).map((line, i) => `<text x="64" y="${250 + i * 54}" class="prompt">${escapeSvg(line)}</text>`).join("\n");
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1d2b64"/>
-      <stop offset="0.52" stop-color="#6c5ce7"/>
-      <stop offset="1" stop-color="#f8cdda"/>
-    </linearGradient>
-    <filter id="glow"><feGaussianBlur stdDeviation="9" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-    <style>
-      .title { font: 700 56px system-ui, -apple-system, BlinkMacSystemFont, sans-serif; fill: white; }
-      .small { font: 500 25px system-ui, -apple-system, BlinkMacSystemFont, sans-serif; fill: rgba(255,255,255,.78); }
-      .prompt { font: 700 44px system-ui, -apple-system, BlinkMacSystemFont, sans-serif; fill: white; }
-    </style>
-  </defs>
-  <rect width="1024" height="1024" fill="url(#bg)"/>
-  <circle cx="780" cy="190" r="150" fill="rgba(255,255,255,.18)" filter="url(#glow)"/>
-  <circle cx="160" cy="820" r="220" fill="rgba(0,0,0,.16)"/>
-  <rect x="48" y="160" width="928" height="560" rx="44" fill="rgba(0,0,0,.28)" stroke="rgba(255,255,255,.25)"/>
-  <text x="64" y="110" class="title">${escapeSvg(title)}</text>
-  <text x="64" y="775" class="small">Codex/OpenAI image generation was unavailable, so TORO made a local fallback card.</text>
-  ${lines}
-</svg>`;
-  return new AttachmentBuilder(Buffer.from(svg, "utf-8"), { name: "toro-art-fallback.svg" });
-}
-
 async function tryGenerateWithOpenAI(prompt: string, quality: ImageModel): Promise<AttachmentBuilder | null> {
   if (!process.env.OPENAI_API_KEY) return null;
 
@@ -181,10 +146,10 @@ export async function generateImage(
     console.warn(`[Image] Codex generation failed, OpenAI API fallback if configured: ${msg.slice(0, 160)}`);
     const fallback = await tryGenerateWithOpenAI(prompt, quality);
     if (fallback) return { attachment: fallback, usedModel: quality, provider: "openai" };
-    return { attachment: generateLocalFallback(prompt, quality), usedModel: quality, provider: "local" };
+    return null;
   }
 
   const fallback = await tryGenerateWithOpenAI(prompt, quality);
   if (fallback) return { attachment: fallback, usedModel: quality, provider: "openai" };
-  return { attachment: generateLocalFallback(prompt, quality), usedModel: quality, provider: "local" };
+  return null;
 }

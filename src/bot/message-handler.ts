@@ -1,4 +1,4 @@
-import type { Client, Message } from "discord.js";
+import type { AttachmentBuilder, Client, Message } from "discord.js";
 import { getReply, lastUsedModel } from "./ai";
 import { resolveTeamContext } from "../team/context";
 import { TeamLoginRequiredError, TeamSelectionRequiredError } from "../team/errors";
@@ -13,6 +13,7 @@ import { getMentionContextHistory } from "./channel-context";
 import { getUserContext, extractAndSave } from "./vault";
 import { isChannelMuted } from "./commands/mute";
 import type { ImageData } from "./history";
+import { extractImagePrompt, generateImage, isImageGenerationRequest } from "./draw";
 
 // @이름 → <@유저ID> 변환
 function resolveMentions(text: string, message: Message): string {
@@ -52,6 +53,12 @@ const recentMessages = new Set<string>();
 const DEDUP_TTL = 10_000; // 10s
 // 멘션 메시지 처리 중 추적 (동시 실행 방지)
 const processingMentions = new Set<string>();
+
+type MentionResponse = string | {
+  content: string;
+  files?: AttachmentBuilder[];
+  assistantContent?: string;
+};
 
 function isDuplicate(messageId: string): boolean {
   if (recentMessages.has(messageId)) return true;
@@ -184,6 +191,16 @@ export function setupMessageHandler(client: Client): void {
         const webSearchContext = await fetchWebSearchContext(cleanContent);
         const vaultContext = getUserContext(message.author.displayName);
         const ragContext = rag.formatContext(ragResults) + urlContext + webSearchContext + vaultContext;
+        if (isImageGenerationRequest(cleanContent)) {
+          const imagePrompt = extractImagePrompt(cleanContent);
+          const result = await generateImage(imagePrompt, "flash");
+          if (!result) return "이미지 생성기가 지금은 안 잡힌다냥. SVG로 대체하지 않고 멈췄으니, 잠시 후 다시 시도해줘냥 @д@";
+          const label = result.provider === "codex" ? "codex image" : "openai image";
+          const content = `**${imagePrompt}** (${label})`;
+          await appendConversationMessage({ teamId: teamContext.team.id, guildId: message.guildId, channelId, role: "assistant", content });
+          return { content, files: [result.attachment], assistantContent: content };
+        }
+
         const mentionIds = [...message.mentions.users.keys()].filter((id) => id !== client.user?.id);
         const routedReply = await routeToroMessage({ teamContext, content: cleanContent, mentions: mentionIds, history: teamHistory, source: { guildId: message.guildId, channelId, messageId: message.id }, chat: (conversationHistory) => getReply(conversationHistory, ragContext, message.author.id) });
         await appendConversationMessage({ teamId: teamContext.team.id, guildId: message.guildId, channelId, role: "assistant", content: routedReply });
@@ -194,12 +211,18 @@ export function setupMessageHandler(client: Client): void {
 
       if (!reply) return;
 
-      const resolved = resolveMentions(reply, message);
+      const response = reply as MentionResponse;
+      const rawContent = typeof response === "string" ? response : response.content;
+      const resolved = resolveMentions(rawContent, message);
       console.log(`[MENTION:REPLY] id=${message.id} replySent=${replySent} reply="${resolved.slice(0, 50)}"`);
-      await message.reply(resolved);
+      if (typeof response === "string") {
+        await message.reply(resolved);
+      } else {
+        await message.reply({ content: resolved, files: response.files ?? [] });
+      }
       replySent = true;
       console.log(`[MENTION:SENT] id=${message.id} replySent=true`);
-      history.addMessage(channelId, { role: "assistant", content: reply });
+      history.addMessage(channelId, { role: "assistant", content: typeof response === "string" ? response : (response.assistantContent ?? rawContent) });
       state.stats.repliesSent++;
 
       // Background: extract user info from conversation

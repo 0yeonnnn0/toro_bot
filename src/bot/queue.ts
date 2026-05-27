@@ -4,9 +4,9 @@ const QUEUE_TIMEOUT = 15000;
 
 let activeCount = 0;
 
-interface QueueEntry {
-  task: () => Promise<string | null>;
-  resolve: (value: string | null) => void;
+interface QueueEntry<T = unknown> {
+  task: () => Promise<T | null>;
+  resolve: (value: T | null) => void;
   reject: (reason: unknown) => void;
   addedAt: number;
 }
@@ -24,9 +24,9 @@ export function markUserRequest(userId: string): void {
   userLastReply.set(userId, Date.now());
 }
 
-export function enqueue(task: () => Promise<string | null>): Promise<string | null> {
-  return new Promise((resolve, reject) => {
-    queue.push({ task, resolve, reject, addedAt: Date.now() });
+export function enqueue<T = string>(task: () => Promise<T | null>): Promise<T | null> {
+  return new Promise<T | null>((resolve, reject) => {
+    queue.push({ task, resolve: resolve as (value: unknown | null) => void, reject, addedAt: Date.now() });
     processQueue();
   });
 }
