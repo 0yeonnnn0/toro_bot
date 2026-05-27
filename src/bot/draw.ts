@@ -137,7 +137,7 @@ function runCodexForImage(prompt: string, quality: ImageModel, workdir: string, 
       });
       child.on("close", (code) => {
         clearTimeout(timer);
-        if (code === 0 && fs.existsSync(outputFile)) resolve();
+        if (code === 0) resolve();
         else reject(new Error(`Codex image generation failed (${code}): ${(stderr || stdout).slice(-2000)}`));
       });
       child.stdin.on("error", () => {});
@@ -161,15 +161,72 @@ function isPngBuffer(buffer: Buffer): boolean {
     && buffer[7] === 0x0a;
 }
 
+function newestGeneratedCodexPng(sinceMs: number): Buffer | null {
+  const codexHome = process.env.CODEX_HOME;
+  if (!codexHome) return null;
+
+  const root = path.join(codexHome, "generated_images");
+  if (!fs.existsSync(root)) return null;
+
+  let newestPath: string | null = null;
+  let newestMtimeMs = -Infinity;
+  const visit = (dir: string, depth = 0) => {
+    if (depth > 5) return;
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        visit(fullPath, depth + 1);
+        continue;
+      }
+      if (!entry.isFile() || !entry.name.toLowerCase().endsWith(".png")) continue;
+
+      try {
+        const stat = fs.statSync(fullPath);
+        if (stat.mtimeMs + 5000 < sinceMs) continue;
+        if (stat.mtimeMs > newestMtimeMs) {
+          newestPath = fullPath;
+          newestMtimeMs = stat.mtimeMs;
+        }
+      } catch {}
+    }
+  };
+
+  visit(root);
+  if (!newestPath) return null;
+
+  const buffer = fs.readFileSync(newestPath);
+  return isPngBuffer(buffer) ? buffer : null;
+}
+
 async function tryGenerateWithCodex(prompt: string, quality: ImageModel): Promise<AttachmentBuilder | null> {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "toro-codex-image-"));
   const outputFile = path.join(tmpDir, "toro-art.png");
+  const startedAt = Date.now();
   try {
     await runCodexForImage(prompt, quality, tmpDir, outputFile);
-    const buffer = fs.readFileSync(outputFile);
-    if (!isPngBuffer(buffer)) {
-      throw new Error("Codex returned a non-PNG file for image generation");
+    let buffer: Buffer | null = null;
+
+    if (fs.existsSync(outputFile)) {
+      const direct = fs.readFileSync(outputFile);
+      if (isPngBuffer(direct)) buffer = direct;
     }
+
+    // Codex's built-in image tool often writes to $CODEX_HOME/generated_images and
+    // reports success before shell-copying into our temp dir. In that case, attach
+    // the newest generated PNG directly instead of falling through to API-key providers.
+    buffer ??= newestGeneratedCodexPng(startedAt);
+
+    if (!buffer) {
+      throw new Error("Codex finished but no valid PNG was found in the requested path or $CODEX_HOME/generated_images");
+    }
+
     return new AttachmentBuilder(buffer, { name: "toro-art.png" });
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
