@@ -49,7 +49,7 @@
 ### AI 이미지 생성
 - `/draw`로 텍스트 프롬프트를 이미지로 생성한다.
 - Codex CLI/ChatGPT 로그인 세션을 우선 사용해 이미지 파일을 생성한다.
-- OpenAI API 키가 있으면 Codex 실패 시 `OPENAI_IMAGE_MODEL=gpt-image-1.5`로 fallback한다.
+- OpenAI API 키가 있으면 Codex 실패 시 `OPENAI_IMAGE_MODEL=gpt-image-1.5`로 fallback한다. OpenAI도 없거나 실패하면 `GOOGLE_API_KEY`로 Gemini 이미지 모델을 fallback으로 사용한다.
 - `/draw quality:flash`는 빠른 초안, `quality:pro`는 고품질 요청으로 처리한다.
 
 ### 음성 답변 (TTS)
@@ -171,7 +171,8 @@ cp .env.example .env
 | `CODEX_MODEL` | Codex CLI 모델. 기본 `codex-cli-default`이면 CLI 설정 기본 모델 사용 |
 | `CODEX_TIMEOUT_MS` | Codex CLI 호출 타임아웃. 기본 `180000` |
 | `GOOGLE_API_KEY` | Google AI API 키. Codex CLI 실패 시 Gemini fallback과 RAG embedding에 사용 |
-| `GOOGLE_MODEL` | Google fallback 모델. 기본 `gemini-3.1-flash-lite-preview` |
+| `GOOGLE_MODEL` | Google fallback 채팅 모델. 기본 `gemini-3.1-flash-lite-preview` |
+| `GOOGLE_IMAGE_MODEL` | `/draw` Google 이미지 fallback 모델. 기본 `gemini-2.5-flash-image-preview` |
 | `OPENAI_API_KEY` | OpenAI API 키. OpenAI API provider, `/draw` fallback, `/say` OpenAI fallback에서 사용 |
 | `OPENAI_MODEL` | OpenAI API 텍스트 모델. 기본 `gpt-4o` |
 | `OPENAI_IMAGE_MODEL` | `/draw` OpenAI API fallback 이미지 모델. 기본 `gpt-image-1.5` |

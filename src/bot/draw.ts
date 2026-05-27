@@ -4,6 +4,7 @@ import path from "path";
 import { spawn } from "child_process";
 import OpenAI from "openai";
 import { AttachmentBuilder } from "discord.js";
+import { state } from "../shared/state";
 
 let openai: OpenAI | null = null;
 
@@ -15,7 +16,7 @@ function getOpenAI(): OpenAI {
 }
 
 export type ImageModel = "flash" | "pro";
-export type ImageProvider = "codex" | "openai";
+export type ImageProvider = "codex" | "openai" | "google";
 
 const IMAGE_REQUEST_RE = /(그림|이미지|일러스트|사진|짤|캐릭터|프로필|배경화면|포스터|로고).*(그려|그리|만들|생성|뽑|제작|draw|generate|create)|(그려줘|그려 줄래|draw me|make me an image|generate an image)/i;
 const VECTOR_OR_CODE_RE = /(svg|벡터|vector|html|코드|마크업|다이어그램|diagram|mermaid|ascii|아스키)/i;
@@ -39,6 +40,14 @@ export function extractImagePrompt(text: string): string {
 
 function imageModelName(): string {
   return process.env.OPENAI_IMAGE_MODEL || "gpt-image-1.5";
+}
+
+function googleImageModelName(): string {
+  return process.env.GOOGLE_IMAGE_MODEL || "gemini-2.5-flash-image-preview";
+}
+
+function googleApiKey(): string {
+  return state.config.googleApiKey || process.env.GOOGLE_API_KEY || "";
 }
 
 function imageQuality(quality: ImageModel): "low" | "high" {
@@ -134,6 +143,39 @@ async function tryGenerateWithOpenAI(prompt: string, quality: ImageModel): Promi
   return new AttachmentBuilder(buffer, { name: "toro-art.png" });
 }
 
+async function tryGenerateWithGoogle(prompt: string, quality: ImageModel): Promise<AttachmentBuilder | null> {
+  const key = googleApiKey();
+  if (!key) return null;
+
+  const model = googleImageModelName();
+  const qualityHint = quality === "pro" ? "high detail, polished composition" : "fast draft, clear composition";
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: `${prompt}\n\nCreate one original image. Style/quality: ${qualityHint}.` }] }],
+      generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`Google image generation failed (${response.status}): ${body.slice(0, 500)}`);
+  }
+
+  const data = await response.json() as any;
+  const parts = data?.candidates?.[0]?.content?.parts ?? [];
+  const imagePart = parts.find((part: any) => part?.inlineData?.data || part?.inline_data?.data);
+  const inline = imagePart?.inlineData ?? imagePart?.inline_data;
+  if (!inline?.data) return null;
+
+  const mimeType = inline.mimeType || inline.mime_type || "image/png";
+  const ext = mimeType.includes("jpeg") || mimeType.includes("jpg") ? "jpg" : mimeType.includes("webp") ? "webp" : "png";
+  const buffer = Buffer.from(inline.data, "base64");
+  if (buffer.length === 0) return null;
+  return new AttachmentBuilder(buffer, { name: `toro-art.${ext}` });
+}
+
 export async function generateImage(
   prompt: string,
   quality: ImageModel = "flash"
@@ -143,13 +185,24 @@ export async function generateImage(
     if (attachment) return { attachment, usedModel: quality, provider: "codex" };
   } catch (err) {
     const msg = (err as Error).message || "";
-    console.warn(`[Image] Codex generation failed, OpenAI API fallback if configured: ${msg.slice(0, 160)}`);
-    const fallback = await tryGenerateWithOpenAI(prompt, quality);
-    if (fallback) return { attachment: fallback, usedModel: quality, provider: "openai" };
-    return null;
+    console.warn(`[Image] Codex generation failed, API fallback if configured: ${msg.slice(0, 160)}`);
   }
 
-  const fallback = await tryGenerateWithOpenAI(prompt, quality);
-  if (fallback) return { attachment: fallback, usedModel: quality, provider: "openai" };
+  try {
+    const fallback = await tryGenerateWithOpenAI(prompt, quality);
+    if (fallback) return { attachment: fallback, usedModel: quality, provider: "openai" };
+  } catch (err) {
+    const msg = (err as Error).message || "";
+    console.warn(`[Image] OpenAI generation failed, Google fallback if configured: ${msg.slice(0, 160)}`);
+  }
+
+  try {
+    const fallback = await tryGenerateWithGoogle(prompt, quality);
+    if (fallback) return { attachment: fallback, usedModel: quality, provider: "google" };
+  } catch (err) {
+    const msg = (err as Error).message || "";
+    console.warn(`[Image] Google generation failed: ${msg.slice(0, 160)}`);
+  }
+
   return null;
 }
