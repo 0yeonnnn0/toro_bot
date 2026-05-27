@@ -1,7 +1,7 @@
 import type { ChatInputCommandInteraction } from "discord.js";
 import { getReply } from "../ai";
 import { getPreset, getActivePresetId } from "../prompt";
-import { generateImage, type ImageModel } from "../draw";
+import { generateImage, getLastImageFailureSummary, type ImageModel } from "../draw";
 import { generateSpeech, type VoiceName } from "../tts";
 
 // ── /draw ──
@@ -19,7 +19,8 @@ export async function handleDraw(interaction: ChatInputCommandInteraction): Prom
         files: [result.attachment],
       });
     } else {
-      await interaction.editReply("이미지 생성에 실패했다냥... 다른 프롬프트로 다시 해보라냥 @д@");
+      const detail = getLastImageFailureSummary();
+      await interaction.editReply(`이미지 생성에 실패했다냥... 다른 프롬프트 문제가 아닐 수 있다냥 @д@${detail ? `\n원인: ${detail}` : ""}`);
     }
   } catch (err) {
     const msg = (err as Error).message;

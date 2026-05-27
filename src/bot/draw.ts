@@ -54,8 +54,21 @@ function imageQuality(quality: ImageModel): "low" | "high" {
   return quality === "pro" ? "high" : "low";
 }
 
+let lastImageFailureSummary = "";
+
+export function getLastImageFailureSummary(): string {
+  return lastImageFailureSummary;
+}
+
+function summarizeError(err: unknown): string {
+  return ((err as Error).message || String(err))
+    .replace(/key=[^\s&]+/gi, "key=***")
+    .replace(/x-access-token:[^@\s]+/gi, "x-access-token:***")
+    .slice(0, 500);
+}
+
 function codexTimeoutMs(): number {
-  return Number(process.env.CODEX_IMAGE_TIMEOUT_MS || process.env.CODEX_TIMEOUT_MS || 180000);
+  return Number(process.env.CODEX_IMAGE_TIMEOUT_MS || process.env.CODEX_TIMEOUT_MS || 300000);
 }
 
 function buildCodexArgs(workdir: string): string[] {
@@ -220,29 +233,38 @@ export async function generateImage(
   prompt: string,
   quality: ImageModel = "flash"
 ): Promise<{ attachment: AttachmentBuilder; usedModel: ImageModel; provider: ImageProvider } | null> {
+  const failures: string[] = [];
+  lastImageFailureSummary = "";
+
   try {
     const attachment = await tryGenerateWithCodex(prompt, quality);
     if (attachment) return { attachment, usedModel: quality, provider: "codex" };
   } catch (err) {
-    const msg = (err as Error).message || "";
+    const msg = summarizeError(err);
+    failures.push(`Codex: ${msg}`);
     console.warn(`[Image] Codex generation failed, API fallback if configured: ${msg.slice(0, 160)}`);
   }
 
   try {
     const fallback = await tryGenerateWithOpenAI(prompt, quality);
     if (fallback) return { attachment: fallback, usedModel: quality, provider: "openai" };
+    if (!process.env.OPENAI_API_KEY) failures.push("OpenAI: OPENAI_API_KEY 없음");
   } catch (err) {
-    const msg = (err as Error).message || "";
+    const msg = summarizeError(err);
+    failures.push(`OpenAI: ${msg}`);
     console.warn(`[Image] OpenAI generation failed, Google fallback if configured: ${msg.slice(0, 160)}`);
   }
 
   try {
     const fallback = await tryGenerateWithGoogle(prompt, quality);
     if (fallback) return { attachment: fallback, usedModel: quality, provider: "google" };
+    if (!googleApiKey()) failures.push("Google: GOOGLE_API_KEY 없음");
   } catch (err) {
-    const msg = (err as Error).message || "";
+    const msg = summarizeError(err);
+    failures.push(`Google: ${msg}`);
     console.warn(`[Image] Google generation failed: ${msg.slice(0, 160)}`);
   }
 
+  lastImageFailureSummary = failures.join(" / ");
   return null;
 }

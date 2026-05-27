@@ -13,7 +13,7 @@ import { getMentionContextHistory } from "./channel-context";
 import { getUserContext, extractAndSave } from "./vault";
 import { isChannelMuted } from "./commands/mute";
 import type { ImageData } from "./history";
-import { extractImagePrompt, generateImage, isImageGenerationRequest } from "./draw";
+import { extractImagePrompt, generateImage, getLastImageFailureSummary, isImageGenerationRequest } from "./draw";
 
 // @이름 → <@유저ID> 변환
 function resolveMentions(text: string, message: Message): string {
@@ -194,7 +194,10 @@ export function setupMessageHandler(client: Client): void {
         if (isImageGenerationRequest(cleanContent)) {
           const imagePrompt = extractImagePrompt(cleanContent);
           const result = await generateImage(imagePrompt, "flash");
-          if (!result) return "이미지 생성기가 지금은 안 잡힌다냥. SVG로 대체하지 않고 멈췄으니, 잠시 후 다시 시도해줘냥 @д@";
+          if (!result) {
+            const detail = getLastImageFailureSummary();
+            return `이미지 생성기가 지금은 안 잡힌다냥. SVG로 대체하지 않고 멈췄다냥 @д@${detail ? `\n원인: ${detail}` : ""}`;
+          }
           const label = result.provider === "codex" ? "codex image" : "openai image";
           const content = `**${imagePrompt}** (${label})`;
           await appendConversationMessage({ teamId: teamContext.team.id, guildId: message.guildId, channelId, role: "assistant", content });
