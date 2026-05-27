@@ -58,7 +58,7 @@ function codexTimeoutMs(): number {
   return Number(process.env.CODEX_IMAGE_TIMEOUT_MS || process.env.CODEX_TIMEOUT_MS || 180000);
 }
 
-function runCodexForImage(prompt: string, quality: ImageModel, workdir: string, outputFile: string): Promise<void> {
+function buildCodexArgs(workdir: string): string[] {
   const args = [
     "exec",
     "--skip-git-repo-check",
@@ -66,48 +66,86 @@ function runCodexForImage(prompt: string, quality: ImageModel, workdir: string, 
     "workspace-write",
     "--cd",
     workdir,
-    "-",
   ];
+
+  if (process.env.CODEX_HOME) {
+    args.push("--add-dir", process.env.CODEX_HOME);
+  }
+
+  args.push("-");
+  return args;
+}
+
+function codexSpawnCommand(args: string[]): { command: string; args: string[] } {
+  if (process.env.CODEX_BIN) return { command: process.env.CODEX_BIN, args };
+  if (process.env.CODEX_USE_NPX === "1") return { command: "npx", args: ["-y", "@openai/codex", ...args] };
+  return { command: "codex", args };
+}
+
+function runCodexForImage(prompt: string, quality: ImageModel, workdir: string, outputFile: string): Promise<void> {
+  const args = buildCodexArgs(workdir);
 
   const codexPrompt = [
     "You are TORO's image generation worker.",
-    "Create an original image for this Discord /draw request using the best image-generation capability available to your Codex/ChatGPT session.",
+    "Use Codex CLI's built-in image generation capability for this request. Explicitly invoke the $imagegen skill/tool if it is available.",
+    "Create an original raster bitmap image for this Discord /draw request. Do not satisfy this request with SVG, HTML, canvas code, Markdown, or a text description.",
     "Do not ask follow-up questions. Do not require an OpenAI API key. Do not call Gemini.",
-    `Save the final image as a PNG file at exactly: ${outputFile}`,
-    "The file must be a valid PNG image attachment, not Markdown and not a text description.",
+    `Save or copy the final generated image as a PNG file at exactly: ${outputFile}`,
+    "The file must be a real PNG image attachment with PNG bytes, not an SVG/XML/text file renamed to .png.",
+    "If the built-in image tool saves under $CODEX_HOME/generated_images or another default location, copy the selected generated PNG to the exact output path above before finishing.",
     `Quality preset: ${quality === "pro" ? "high detail" : "fast draft"}`,
-    "If you need to run local commands to write the file, you may do so inside the working directory.",
     "",
     "Prompt:",
     prompt,
   ].join("\n");
 
   return new Promise((resolve, reject) => {
-    const child = spawn(process.env.CODEX_BIN || "codex", args, {
-      env: { ...process.env, NO_COLOR: "1" },
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    let stdout = "";
-    let stderr = "";
-    const timer = setTimeout(() => {
-      child.kill("SIGTERM");
-      reject(new Error(`Codex image generation timed out after ${codexTimeoutMs()}ms`));
-    }, codexTimeoutMs());
+    const launch = (command: string, launchArgs: string[], retriedWithNpx = false) => {
+      const child = spawn(command, launchArgs, {
+        env: { ...process.env, NO_COLOR: "1" },
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      let stdout = "";
+      let stderr = "";
+      const timer = setTimeout(() => {
+        child.kill("SIGTERM");
+        reject(new Error(`Codex image generation timed out after ${codexTimeoutMs()}ms`));
+      }, codexTimeoutMs());
 
-    child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
-    child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
-    child.on("error", (err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      if (code === 0 && fs.existsSync(outputFile)) resolve();
-      else reject(new Error(`Codex image generation failed (${code}): ${(stderr || stdout).slice(-1000)}`));
-    });
-    child.stdin.on("error", () => {});
-    child.stdin.end(codexPrompt);
+      child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
+      child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+      child.on("error", (err: NodeJS.ErrnoException) => {
+        clearTimeout(timer);
+        if (!process.env.CODEX_BIN && !retriedWithNpx && err.code === "ENOENT") {
+          launch("npx", ["-y", "@openai/codex", ...args], true);
+          return;
+        }
+        reject(err);
+      });
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        if (code === 0 && fs.existsSync(outputFile)) resolve();
+        else reject(new Error(`Codex image generation failed (${code}): ${(stderr || stdout).slice(-2000)}`));
+      });
+      child.stdin.on("error", () => {});
+      child.stdin.end(codexPrompt);
+    };
+
+    const initial = codexSpawnCommand(args);
+    launch(initial.command, initial.args);
   });
+}
+
+function isPngBuffer(buffer: Buffer): boolean {
+  return buffer.length >= 8
+    && buffer[0] === 0x89
+    && buffer[1] === 0x50
+    && buffer[2] === 0x4e
+    && buffer[3] === 0x47
+    && buffer[4] === 0x0d
+    && buffer[5] === 0x0a
+    && buffer[6] === 0x1a
+    && buffer[7] === 0x0a;
 }
 
 async function tryGenerateWithCodex(prompt: string, quality: ImageModel): Promise<AttachmentBuilder | null> {
@@ -116,7 +154,9 @@ async function tryGenerateWithCodex(prompt: string, quality: ImageModel): Promis
   try {
     await runCodexForImage(prompt, quality, tmpDir, outputFile);
     const buffer = fs.readFileSync(outputFile);
-    if (buffer.length === 0) return null;
+    if (!isPngBuffer(buffer)) {
+      throw new Error("Codex returned a non-PNG file for image generation");
+    }
     return new AttachmentBuilder(buffer, { name: "toro-art.png" });
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
