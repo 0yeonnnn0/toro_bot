@@ -1,8 +1,10 @@
 import type { ChatInputCommandInteraction } from "discord.js";
 import { getReply } from "../ai";
 import { getPreset, getActivePresetId } from "../prompt";
-import { generateImage, getLastImageFailureSummary, type ImageModel } from "../draw";
+import { generateImage, type ImageModel } from "../draw";
 import { generateSpeech, type VoiceName } from "../tts";
+
+const IMAGE_FAILURE_MESSAGE = "이미지 생성에 실패했다냥... @д@";
 
 // ── /draw ──
 export async function handleDraw(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -19,16 +21,11 @@ export async function handleDraw(interaction: ChatInputCommandInteraction): Prom
         files: [result.attachment],
       });
     } else {
-      const detail = getLastImageFailureSummary();
-      await interaction.editReply(`이미지 생성에 실패했다냥... 다른 프롬프트 문제가 아닐 수 있다냥 @д@${detail ? `\n원인: ${detail}` : ""}`);
+      await interaction.editReply(IMAGE_FAILURE_MESSAGE);
     }
   } catch (err) {
-    const msg = (err as Error).message;
-    if (msg.includes("429") || msg.includes("quota")) {
-      await interaction.editReply("오늘은 그림을 너무 많이 그렸다냥... 내일 다시 오라냥! >w<");
-    } else {
-      await interaction.editReply("그림 그리다 뭔가 고장났다냥... @д@ [MD]\n" + msg);
-    }
+    console.warn(`[Image] /draw failed: ${(err as Error).message.slice(0, 160)}`);
+    await interaction.editReply(IMAGE_FAILURE_MESSAGE);
   }
 }
 

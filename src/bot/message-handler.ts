@@ -13,7 +13,9 @@ import { getMentionContextHistory } from "./channel-context";
 import { getUserContext, extractAndSave } from "./vault";
 import { isChannelMuted } from "./commands/mute";
 import type { ImageData } from "./history";
-import { extractImagePrompt, generateImage, getLastImageFailureSummary, isImageGenerationRequest } from "./draw";
+import { extractImagePrompt, generateImage, isImageGenerationRequest } from "./draw";
+
+const IMAGE_FAILURE_MESSAGE = "이미지 생성에 실패했다냥... @д@";
 
 // @이름 → <@유저ID> 변환
 function resolveMentions(text: string, message: Message): string {
@@ -195,8 +197,7 @@ export function setupMessageHandler(client: Client): void {
           const imagePrompt = extractImagePrompt(cleanContent);
           const result = await generateImage(imagePrompt, "flash");
           if (!result) {
-            const detail = getLastImageFailureSummary();
-            return `이미지 생성기가 지금은 안 잡힌다냥. SVG로 대체하지 않고 멈췄다냥 @д@${detail ? `\n원인: ${detail}` : ""}`;
+            return IMAGE_FAILURE_MESSAGE;
           }
           const label = result.provider === "codex" ? "codex image" : "openai image";
           const content = `**${imagePrompt}** (${label})`;
