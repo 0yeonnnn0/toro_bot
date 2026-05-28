@@ -164,14 +164,21 @@ cp .env.example .env
 | `OWNER_ID` | 봇 주인 Discord ID |
 | `DASHBOARD_PORT` | 웹 서버 포트. 기본 `3000` |
 | `DASHBOARD_SECRET` | 관리자 대시보드 비밀번호 |
+| `TORO_PUBLIC_URL` | OAuth callback 등에 쓰는 외부 HTTPS origin |
+| `PUBLIC_BASE_URL`, `DASHBOARD_PUBLIC_URL` | `TORO_PUBLIC_URL`의 호환 alias. 보통 비워둠 |
 | `DATABASE_URL` | Prisma DB URL. Docker 기본값은 `file:/app/data/toro.db` |
 | `AI_PROVIDER` | `codex` / `google` / `openai` / `anthropic`. 기본값은 Codex CLI |
 | `CODEX_HOME` | 컨테이너 안 Codex CLI 로그인 캐시 경로. 기본 `/codex` |
 | `CODEX_HOME_HOST` | 호스트에서 마운트할 Codex CLI 로그인 캐시 경로. 기본 `./codex` |
+| `CODEX_BIN` | Codex 실행 파일 경로 override. 비우면 `PATH`의 `codex` 사용 |
+| `CODEX_WORKDIR` | Codex 채팅 응답 실행 작업 디렉터리. 비우면 OS temp dir 사용 |
 | `CODEX_MODEL` | Codex CLI 모델. 기본 `codex-cli-default`이면 CLI 설정 기본 모델 사용 |
 | `CODEX_TIMEOUT_MS` | Codex CLI 호출 타임아웃. 기본 `180000` |
+| `CODEX_IMAGE_TIMEOUT_MS` | `/draw` Codex 이미지 생성 타임아웃. 기본 `300000` |
+| `CODEX_USE_NPX` | `CODEX_BIN`이 없을 때 `npx -y @openai/codex` 사용 여부. `1`이면 사용 |
 | `GOOGLE_API_KEY` | Google AI API 키. Codex CLI 실패 시 Gemini fallback과 RAG embedding에 사용 |
-| `GOOGLE_MODEL` | Google fallback 채팅 모델. 기본 `gemini-3.1-flash-lite-preview` |
+| `GOOGLE_MODEL` | Google 채팅 모델. 기본 `gemini-3.1-flash-lite-preview` |
+| `GOOGLE_FALLBACK_MODEL` | AI fallback용 Google 모델. 기본은 `GOOGLE_MODEL` |
 | `GOOGLE_IMAGE_MODEL` | `/draw` Google 이미지 fallback 모델. 기본 `gemini-2.5-flash-image-preview` |
 | `OPENAI_API_KEY` | OpenAI API 키. OpenAI API provider, `/draw` fallback, `/say` OpenAI fallback에서 사용 |
 | `OPENAI_MODEL` | OpenAI API 텍스트 모델. 기본 `gpt-4o` |
@@ -179,6 +186,8 @@ cp .env.example .env
 | `TORO_TTS_PROVIDER` | `/say` TTS provider. 기본 `edge`라 API key가 필요 없음. `openai`로 설정하면 OpenAI TTS 우선 |
 | `EDGE_TTS_VOICE` | Edge TTS 음성 override. 기본 한국어 `ko-KR-SunHiNeural` / `ko-KR-InJoonNeural` |
 | `EDGE_TTS_PYTHON` | Edge TTS 실행 Python. 기본 `python3` |
+| `EDGE_TTS_TIMEOUT_MS` | Edge TTS 타임아웃. 기본 `60000` |
+| `EDGE_TTS_RATE`, `EDGE_TTS_PITCH`, `EDGE_TTS_VOLUME` | Edge TTS 말속도/피치/볼륨 override |
 | `OPENAI_TTS_MODEL` | `/say` OpenAI fallback TTS 모델. 기본 `gpt-4o-mini-tts` |
 | `ANTHROPIC_API_KEY` | Anthropic API 키 |
 | `TOKEN_ENCRYPTION_KEY` | OAuth token 암호화 키. 없으면 production에서 `data/token-encryption.key`를 자동 생성 |
@@ -186,8 +195,6 @@ cp .env.example .env
 | `GOOGLE_CLIENT_ID` | Google Calendar OAuth client id |
 | `GOOGLE_CLIENT_SECRET` | Google Calendar OAuth client secret |
 | `GOOGLE_REDIRECT_URI` | Google Calendar OAuth callback URL |
-| `TORO_DEFAULT_TEAM_MODE` | 팀 사용 정책. 기본 `required` |
-| `TORO_ALLOW_AUTO_TEAM_CREATE` | 자동 팀 생성 허용 여부 |
 
 비밀값은 README나 git에 커밋하지 말고 `.env`에만 둔다.
 
