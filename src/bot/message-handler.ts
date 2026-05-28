@@ -104,6 +104,8 @@ export function setupMessageHandler(client: Client): void {
     history.addMessage(channelId, {
       role: "user",
       content: `${message.author.displayName}: ${cleanContent}${imageData ? " [이미지 첨부]" : ""}`,
+      discordUserId: message.author.id,
+      displayName: message.author.displayName,
       imageData,
     });
 
@@ -192,7 +194,8 @@ export function setupMessageHandler(client: Client): void {
         ragHitCount = ragResults.length;
         const urlContext = await fetchUrlContext(cleanContent);
         const webSearchContext = await fetchWebSearchContext(cleanContent);
-        const vaultContext = getUserContext(message.author.displayName);
+        const userIdentity = { discordUserId: message.author.id, displayName: message.author.displayName };
+        const vaultContext = getUserContext(userIdentity);
         const ragContext = rag.formatContext(ragResults) + urlContext + webSearchContext + vaultContext;
         if (isImageSearchRequest(cleanContent)) {
           const imageQuery = extractImageSearchQuery(cleanContent);
@@ -240,8 +243,8 @@ export function setupMessageHandler(client: Client): void {
       state.stats.repliesSent++;
 
       // Background: extract user info from conversation
-      const extractHistory = history.getHistory(channelId).slice(-10);
-      extractAndSave(message.author.displayName, extractHistory).catch(() => {});
+      const extractHistory = history.getHistory(channelId);
+      extractAndSave({ discordUserId: message.author.id, displayName: message.author.displayName }, extractHistory).catch(() => {});
 
       addLog({
         guild: guildName,

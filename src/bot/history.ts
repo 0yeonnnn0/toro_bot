@@ -6,6 +6,8 @@ export interface ImageData {
 export interface HistoryMessage {
   role: "user" | "assistant";
   content: string;
+  discordUserId?: string;
+  displayName?: string;
   imageData?: ImageData;
 }
 
