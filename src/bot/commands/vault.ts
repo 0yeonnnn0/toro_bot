@@ -4,7 +4,7 @@ import { readUserNote } from "../vault";
 // ── /내정보 ──
 export async function handleMyInfo(interaction: ChatInputCommandInteraction): Promise<void> {
   const target = interaction.options.getUser("user") || interaction.user;
-  const note = readUserNote(target.displayName);
+  const note = readUserNote({ discordUserId: target.id, displayName: target.displayName });
 
   if (!note) {
     await interaction.reply({

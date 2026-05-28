@@ -13,7 +13,10 @@ import { getMentionContextHistory } from "./channel-context";
 import { getUserContext, extractAndSave } from "./vault";
 import { isChannelMuted } from "./commands/mute";
 import type { ImageData } from "./history";
-import { extractImagePrompt, generateImage, getLastImageFailureSummary, isImageGenerationRequest } from "./draw";
+import { extractImagePrompt, generateImage, isImageGenerationRequest } from "./draw";
+import { extractImageSearchQuery, isImageSearchRequest, searchImageAttachment } from "./image-search";
+
+const IMAGE_FAILURE_MESSAGE = "이미지 생성에 실패했다냥... @д@";
 
 // @이름 → <@유저ID> 변환
 function resolveMentions(text: string, message: Message): string {
@@ -101,6 +104,8 @@ export function setupMessageHandler(client: Client): void {
     history.addMessage(channelId, {
       role: "user",
       content: `${message.author.displayName}: ${cleanContent}${imageData ? " [이미지 첨부]" : ""}`,
+      discordUserId: message.author.id,
+      displayName: message.author.displayName,
       imageData,
     });
 
@@ -189,14 +194,23 @@ export function setupMessageHandler(client: Client): void {
         ragHitCount = ragResults.length;
         const urlContext = await fetchUrlContext(cleanContent);
         const webSearchContext = await fetchWebSearchContext(cleanContent);
-        const vaultContext = getUserContext(message.author.displayName);
+        const userIdentity = { discordUserId: message.author.id, displayName: message.author.displayName };
+        const vaultContext = getUserContext(userIdentity);
         const ragContext = rag.formatContext(ragResults) + urlContext + webSearchContext + vaultContext;
+        if (isImageSearchRequest(cleanContent)) {
+          const imageQuery = extractImageSearchQuery(cleanContent);
+          const result = await searchImageAttachment(imageQuery);
+          if (!result) return "사진 검색 결과를 못 가져왔다냥... @д@";
+
+          const content = `**${imageQuery}** 사진 가져왔다냥${result.pageUrl ? `\n출처: ${result.pageUrl}` : ""}`;
+          await appendConversationMessage({ teamId: teamContext.team.id, guildId: message.guildId, channelId, role: "assistant", content });
+          return { content, files: [result.attachment], assistantContent: content };
+        }
         if (isImageGenerationRequest(cleanContent)) {
           const imagePrompt = extractImagePrompt(cleanContent);
           const result = await generateImage(imagePrompt, "flash");
           if (!result) {
-            const detail = getLastImageFailureSummary();
-            return `이미지 생성기가 지금은 안 잡힌다냥. SVG로 대체하지 않고 멈췄다냥 @д@${detail ? `\n원인: ${detail}` : ""}`;
+            return IMAGE_FAILURE_MESSAGE;
           }
           const label = result.provider === "codex" ? "codex image" : "openai image";
           const content = `**${imagePrompt}** (${label})`;
@@ -229,8 +243,8 @@ export function setupMessageHandler(client: Client): void {
       state.stats.repliesSent++;
 
       // Background: extract user info from conversation
-      const extractHistory = history.getHistory(channelId).slice(-10);
-      extractAndSave(message.author.displayName, extractHistory).catch(() => {});
+      const extractHistory = history.getHistory(channelId);
+      extractAndSave({ discordUserId: message.author.id, displayName: message.author.displayName }, extractHistory).catch(() => {});
 
       addLog({
         guild: guildName,
