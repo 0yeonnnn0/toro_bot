@@ -5,6 +5,16 @@ import { generateImage, type ImageModel } from "../draw";
 import { generateSpeech, type VoiceName } from "../tts";
 
 const IMAGE_FAILURE_MESSAGE = "이미지 생성에 실패했다냥... @д@";
+const DISCORD_CONTENT_LIMIT = 2000;
+
+function truncateDiscordContent(content: string): string {
+  if (content.length <= DISCORD_CONTENT_LIMIT) return content;
+  return content.slice(0, DISCORD_CONTENT_LIMIT - 1) + "…";
+}
+
+export function formatSayReplyContent(message: string, textReply: string, suffix = ""): string {
+  return truncateDiscordContent(`**원본 메시지**\n${message}\n\n**토로 답변**\n${textReply}${suffix}`);
+}
 
 // ── /draw ──
 export async function handleDraw(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -44,13 +54,18 @@ export async function handleSay(interaction: ChatInputCommandInteraction): Promi
     const textReply = await getReply(h, "", interaction.user.id);
 
     const attachment = await generateSpeech(textReply, voice);
+    const content = formatSayReplyContent(message, textReply);
     if (attachment) {
       await interaction.editReply({
-        content: textReply,
+        content,
         files: [attachment],
+        allowedMentions: { parse: [] },
       });
     } else {
-      await interaction.editReply(textReply + "\n\n*목소리가 안 나온다냥... @д@*");
+      await interaction.editReply({
+        content: formatSayReplyContent(message, textReply, "\n\n*목소리가 안 나온다냥... @д@*"),
+        allowedMentions: { parse: [] },
+      });
     }
   } catch (err) {
     const msg = (err as Error).message;
