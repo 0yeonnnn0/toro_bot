@@ -14,6 +14,7 @@ import { getUserContext, extractAndSave } from "./vault";
 import { isChannelMuted } from "./commands/mute";
 import type { ImageData } from "./history";
 import { extractImagePrompt, generateImage, isImageGenerationRequest } from "./draw";
+import { extractImageSearchQuery, isImageSearchRequest, searchImageAttachment } from "./image-search";
 
 const IMAGE_FAILURE_MESSAGE = "이미지 생성에 실패했다냥... @д@";
 
@@ -193,6 +194,15 @@ export function setupMessageHandler(client: Client): void {
         const webSearchContext = await fetchWebSearchContext(cleanContent);
         const vaultContext = getUserContext(message.author.displayName);
         const ragContext = rag.formatContext(ragResults) + urlContext + webSearchContext + vaultContext;
+        if (isImageSearchRequest(cleanContent)) {
+          const imageQuery = extractImageSearchQuery(cleanContent);
+          const result = await searchImageAttachment(imageQuery);
+          if (!result) return "사진 검색 결과를 못 가져왔다냥... @д@";
+
+          const content = `**${imageQuery}** 사진 가져왔다냥${result.pageUrl ? `\n출처: ${result.pageUrl}` : ""}`;
+          await appendConversationMessage({ teamId: teamContext.team.id, guildId: message.guildId, channelId, role: "assistant", content });
+          return { content, files: [result.attachment], assistantContent: content };
+        }
         if (isImageGenerationRequest(cleanContent)) {
           const imagePrompt = extractImagePrompt(cleanContent);
           const result = await generateImage(imagePrompt, "flash");
