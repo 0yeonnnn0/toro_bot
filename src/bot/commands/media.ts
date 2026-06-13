@@ -1,4 +1,9 @@
-import type { ChatInputCommandInteraction } from "discord.js";
+import {
+  MessageFlags,
+  type ChatInputCommandInteraction,
+  type InteractionEditReplyOptions,
+  type MessageCreateOptions,
+} from "discord.js";
 import { getReply } from "../ai";
 import { getPreset, getActivePresetId } from "../prompt";
 import { generateImage, type ImageModel } from "../draw";
@@ -16,26 +21,43 @@ export function formatSayReplyContent(message: string, textReply: string, suffix
   return truncateDiscordContent(`**원본 메시지**\n${message}\n\n**토로 답변**\n${textReply}${suffix}`);
 }
 
+type DrawReplyPayload = Pick<MessageCreateOptions, "content" | "files">;
+
+async function sendCompletedDrawMessage(
+  interaction: ChatInputCommandInteraction,
+  payload: DrawReplyPayload,
+): Promise<void> {
+  const publicPayload: MessageCreateOptions = { ...payload, allowedMentions: { parse: [] } };
+
+  if (interaction.channel?.isSendable()) {
+    await interaction.channel.send(publicPayload);
+    await interaction.deleteReply().catch(() => {});
+    return;
+  }
+
+  await interaction.editReply(publicPayload as InteractionEditReplyOptions);
+}
+
 // ── /draw ──
 export async function handleDraw(interaction: ChatInputCommandInteraction): Promise<void> {
   const prompt = interaction.options.getString("prompt", true);
   const quality = (interaction.options.getString("quality") || "flash") as ImageModel;
-  await interaction.deferReply();
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
     const result = await generateImage(prompt, quality);
     if (result) {
       const label = result.usedModel === "pro" ? ` (${result.provider} high)` : ` (${result.provider} fast)`;
-      await interaction.editReply({
+      await sendCompletedDrawMessage(interaction, {
         content: `**${prompt}**${label}`,
         files: [result.attachment],
       });
     } else {
-      await interaction.editReply(IMAGE_FAILURE_MESSAGE);
+      await sendCompletedDrawMessage(interaction, { content: IMAGE_FAILURE_MESSAGE });
     }
   } catch (err) {
     console.warn(`[Image] /draw failed: ${(err as Error).message.slice(0, 160)}`);
-    await interaction.editReply(IMAGE_FAILURE_MESSAGE);
+    await sendCompletedDrawMessage(interaction, { content: IMAGE_FAILURE_MESSAGE });
   }
 }
 
