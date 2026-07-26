@@ -18,21 +18,76 @@ interface MusicStats {
   topUsers: { name: string; count: number }[]
 }
 
+interface QueueTrack {
+  title: string
+  url: string
+  duration: string
+  thumbnail: string
+  requestedBy: string
+}
+
+interface ActiveQueueSummary {
+  guildId: string
+  guildName: string
+  current: QueueTrack | null
+  trackCount: number
+  autoplay: boolean
+  autoplayGenre: string | null
+}
+
+interface MusicQueueDetail {
+  guildId: string
+  guildName: string
+  nowPlaying: QueueTrack | null
+  tracks: QueueTrack[]
+  autoplay: { enabled: boolean; genre: string | null }
+}
+
 const MEDAL = ['🥇', '🥈', '🥉']
 const COLORS = ['#FF6B9D', '#C084FC', '#60D9FA', '#34D399', '#FBBF24', '#FB923C', '#F87171']
 
-export default function Music() {
+export default function Music({ editable = false }: { editable?: boolean }) {
   const [logs, setLogs] = useState<MusicLogEntry[]>([])
   const [stats, setStats] = useState<MusicStats | null>(null)
-  const [tab, setTab] = useState<'history' | 'stats'>('history')
+  const [tab, setTab] = useState<'playlist' | 'history' | 'stats'>(editable ? 'playlist' : 'history')
   const [page, setPage] = useState(0)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [queues, setQueues] = useState<ActiveQueueSummary[]>([])
+  const [selectedGuildId, setSelectedGuildId] = useState<string>('')
+  const [queueDetail, setQueueDetail] = useState<MusicQueueDetail | null>(null)
+  const [playlistStatus, setPlaylistStatus] = useState('')
+  const [addQuery, setAddQuery] = useState('')
+  const [busy, setBusy] = useState(false)
   const navigate = useNavigate()
   const perPage = 12
+
+  const fetchQueueDetail = (guildId: string) => {
+    if (!guildId) {
+      setQueueDetail(null)
+      return
+    }
+    fetch(`/api/music/queues/${guildId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(setQueueDetail)
+      .catch(() => setQueueDetail(null))
+  }
 
   const fetchData = () => {
     fetch('/api/music-logs?limit=500').then(r => r.json()).then(setLogs).catch(() => {})
     fetch('/api/music-logs/stats').then(r => r.json()).then(setStats).catch(() => {})
+    if (editable) {
+      fetch('/api/music/queues')
+        .then(r => r.ok ? r.json() : [])
+        .then((items: ActiveQueueSummary[]) => {
+          setQueues(items)
+          setSelectedGuildId(current => {
+            const next = current && items.some(q => q.guildId === current) ? current : (items[0]?.guildId || '')
+            fetchQueueDetail(next)
+            return next
+          })
+        })
+        .catch(() => setQueues([]))
+    }
   }
 
   useEffect(() => {
@@ -40,6 +95,51 @@ export default function Music() {
     const id = setInterval(fetchData, 10000)
     return () => clearInterval(id)
   }, [])
+
+  const refreshSelectedQueue = () => fetchQueueDetail(selectedGuildId)
+
+  const updatePlaylist = async (action: () => Promise<Response>, successMessage: string) => {
+    if (!selectedGuildId) return
+    setBusy(true)
+    setPlaylistStatus('처리 중...')
+    try {
+      const res = await action()
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || '요청 실패')
+      if (data.tracks && queueDetail) setQueueDetail({ ...queueDetail, tracks: data.tracks, nowPlaying: data.tracks[0] || null, autoplay: data.autoplay || queueDetail.autoplay })
+      setPlaylistStatus(successMessage)
+      fetchData()
+    } catch (err) {
+      setPlaylistStatus((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const addTrack = async () => {
+    const query = addQuery.trim()
+    if (!query) return
+    await updatePlaylist(() => fetch(`/api/music/queues/${selectedGuildId}/tracks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    }), '곡을 추가했어요')
+    setAddQuery('')
+  }
+
+  const moveQueuedTrack = (from: number, to: number) => updatePlaylist(() => fetch(`/api/music/queues/${selectedGuildId}/tracks/move`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, to }),
+  }), '순서를 바꿨어요')
+
+  const removeQueuedTrack = (index: number) => updatePlaylist(() => fetch(`/api/music/queues/${selectedGuildId}/tracks/${index}`, { method: 'DELETE' }), '곡을 제거했어요')
+
+  const setAutoplayMode = (genre: string) => updatePlaylist(() => fetch(`/api/music/queues/${selectedGuildId}/autoplay`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ genre }),
+  }), '자동 추천 설정을 바꿨어요')
 
   const totalPages = Math.max(1, Math.ceil(logs.length / perPage))
   const paged = logs.slice(page * perPage, (page + 1) * perPage)
@@ -486,6 +586,133 @@ export default function Music() {
           margin-top: 12px;
         }
 
+        /* ── Playlist Editor ── */
+        .playlist-panel {
+          max-width: 820px;
+          margin: 0 auto;
+          background: var(--joy-card);
+          border: 2.5px solid var(--joy-border);
+          border-radius: 28px;
+          padding: 20px;
+          animation: music-pop-in 0.45s ease-out;
+        }
+        .playlist-toolbar {
+          display: flex;
+          gap: 10px;
+          align-items: center;
+          flex-wrap: wrap;
+          margin-bottom: 16px;
+        }
+        .playlist-toolbar select,
+        .playlist-toolbar input {
+          font-family: var(--joy-font);
+          font-size: 1rem;
+          border: 2px solid var(--joy-border);
+          border-radius: 16px;
+          padding: 10px 12px;
+          background: white;
+          color: var(--joy-text);
+        }
+        .playlist-toolbar input { flex: 1; min-width: 180px; }
+        .playlist-toolbar button,
+        .playlist-actions button,
+        .playlist-autoplay button {
+          font-family: var(--joy-font);
+          font-weight: 700;
+          border: 0;
+          border-radius: 16px;
+          padding: 10px 14px;
+          background: linear-gradient(135deg, var(--joy-blue), var(--joy-green));
+          color: white;
+          cursor: pointer;
+          transition: transform 0.2s, opacity 0.2s;
+        }
+        .playlist-toolbar button:hover:not(:disabled),
+        .playlist-actions button:hover:not(:disabled),
+        .playlist-autoplay button:hover:not(:disabled) { transform: translateY(-2px); }
+        .playlist-toolbar button:disabled,
+        .playlist-actions button:disabled,
+        .playlist-autoplay button:disabled { opacity: 0.45; cursor: default; }
+        .playlist-status {
+          min-height: 22px;
+          color: var(--joy-text-soft);
+          font-size: 0.95rem;
+          margin: 8px 0 12px;
+        }
+        .playlist-autoplay {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          align-items: center;
+          margin-bottom: 16px;
+          padding: 12px;
+          border-radius: 20px;
+          background: rgba(192, 132, 252, 0.08);
+        }
+        .playlist-autoplay span { font-weight: 700; color: var(--joy-text-soft); }
+        .playlist-empty-small {
+          text-align: center;
+          padding: 34px 12px;
+          color: var(--joy-text-soft);
+          font-size: 1.05rem;
+        }
+        .playlist-track {
+          display: flex;
+          gap: 12px;
+          align-items: center;
+          padding: 12px 0;
+          border-top: 1.5px dashed rgba(192, 132, 252, 0.16);
+        }
+        .playlist-track:first-of-type { border-top: 0; }
+        .playlist-track.current {
+          background: rgba(255, 107, 157, 0.07);
+          margin: 0 -10px;
+          padding: 12px 10px;
+          border-radius: 18px;
+        }
+        .playlist-index {
+          width: 34px;
+          font-family: var(--joy-font-title);
+          color: var(--joy-purple);
+          text-align: center;
+          flex-shrink: 0;
+        }
+        .playlist-info { flex: 1; min-width: 0; }
+        .playlist-title {
+          font-weight: 700;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .playlist-meta {
+          color: var(--joy-text-soft);
+          font-size: 0.85rem;
+          margin-top: 2px;
+        }
+        .playlist-actions {
+          display: flex;
+          gap: 6px;
+          flex-shrink: 0;
+        }
+        .playlist-actions button {
+          background: rgba(139, 123, 163, 0.12);
+          color: var(--joy-text);
+          padding: 8px 10px;
+        }
+        .playlist-actions button.remove {
+          background: rgba(248, 113, 113, 0.16);
+          color: #B91C1C;
+        }
+        @media (max-width: 600px) {
+          .playlist-panel { padding: 14px; border-radius: 22px; }
+          .playlist-toolbar { align-items: stretch; }
+          .playlist-toolbar select,
+          .playlist-toolbar input,
+          .playlist-toolbar button { width: 100%; }
+          .playlist-track { align-items: flex-start; }
+          .playlist-actions { flex-direction: column; }
+        }
+
         /* ── Notes (floating decorations) ── */
         .music-note {
           position: fixed;
@@ -514,6 +741,14 @@ export default function Music() {
 
         {/* Tab Nav */}
         <div className="music-nav">
+          {editable && (
+            <button
+              className={tab === 'playlist' ? 'active-history' : 'inactive'}
+              onClick={() => { setTab('playlist'); setPage(0); refreshSelectedQueue() }}
+            >
+              📻 현재 플레이리스트 <span className="tab-count">{queueDetail?.tracks.length || queues[0]?.trackCount || 0}</span>
+            </button>
+          )}
           <button
             className={tab === 'history' ? 'active-history' : 'inactive'}
             onClick={() => { setTab('history'); setPage(0) }}
@@ -527,6 +762,73 @@ export default function Music() {
             🏆 통계 <span className="tab-count">{stats?.totalPlays || 0}</span>
           </button>
         </div>
+
+        {/* Playlist Tab */}
+        {editable && tab === 'playlist' && (
+          <div className="playlist-panel">
+            {queues.length === 0 ? (
+              <div className="playlist-empty-small">지금 재생 중인 음악 큐가 없어요. 디스코드에서 먼저 `/play`로 음악을 틀어줘요.</div>
+            ) : (
+              <>
+                <div className="playlist-toolbar">
+                  <select
+                    value={selectedGuildId}
+                    aria-label="서버 선택"
+                    onChange={(e) => { setSelectedGuildId(e.target.value); fetchQueueDetail(e.target.value) }}
+                  >
+                    {queues.map(q => (
+                      <option key={q.guildId} value={q.guildId}>{q.guildName} · {q.trackCount}곡</option>
+                    ))}
+                  </select>
+                  <input
+                    value={addQuery}
+                    onChange={(e) => setAddQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') addTrack() }}
+                    placeholder="검색어 또는 YouTube URL 추가"
+                    aria-label="플레이리스트에 추가할 노래"
+                  />
+                  <button disabled={busy || !addQuery.trim()} onClick={addTrack}>추가</button>
+                  <button disabled={busy} onClick={refreshSelectedQueue}>새로고침</button>
+                </div>
+
+                <div className="playlist-autoplay">
+                  <span>자동 추천: {queueDetail?.autoplay.enabled ? (queueDetail.autoplay.genre || '현재 곡 기반') : '꺼짐'}</span>
+                  <button disabled={busy} onClick={() => setAutoplayMode('artist')}>현재 곡 기반</button>
+                  <button disabled={busy} onClick={() => setAutoplayMode('kpop')}>K-Pop</button>
+                  <button disabled={busy} onClick={() => setAutoplayMode('rnb')}>R&B</button>
+                  <button disabled={busy} onClick={() => setAutoplayMode('lofi')}>Lofi</button>
+                  <button disabled={busy} onClick={() => setAutoplayMode('off')}>끄기</button>
+                </div>
+
+                <div className="playlist-status" role="status">{playlistStatus}</div>
+
+                {!queueDetail ? (
+                  <div className="playlist-empty-small">플레이리스트를 불러오는 중이에요.</div>
+                ) : queueDetail.tracks.length === 0 ? (
+                  <div className="playlist-empty-small">큐가 비어있어요.</div>
+                ) : queueDetail.tracks.map((track, index) => (
+                  <div key={`${track.url}-${index}`} className={`playlist-track ${index === 0 ? 'current' : ''}`}>
+                    <div className="playlist-index">{index === 0 ? 'NOW' : index}</div>
+                    {track.thumbnail ? (
+                      <img src={track.thumbnail} alt="" className="music-card-thumb" />
+                    ) : (
+                      <div className="music-card-no-thumb">🎵</div>
+                    )}
+                    <div className="playlist-info">
+                      <div className="playlist-title">{track.title}</div>
+                      <div className="playlist-meta">{track.duration} · {track.requestedBy}</div>
+                    </div>
+                    <div className="playlist-actions">
+                      <button disabled={busy || index <= 1} onClick={() => moveQueuedTrack(index, index - 1)}>위</button>
+                      <button disabled={busy || index === 0 || index >= queueDetail.tracks.length - 1} onClick={() => moveQueuedTrack(index, index + 1)}>아래</button>
+                      <button className="remove" disabled={busy || index === 0} onClick={() => removeQueuedTrack(index)}>삭제</button>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        )}
 
         {/* History Tab */}
         {tab === 'history' && (

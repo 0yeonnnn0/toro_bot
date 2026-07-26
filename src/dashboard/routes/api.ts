@@ -7,6 +7,7 @@ import chatRoutes from "./chat";
 import teamRoutes from "./teams";
 import calendarOauthRoutes from "./calendar-oauth";
 import storedRoutes from "./stored";
+import musicControlRoutes from "./music-control";
 
 const router = Router();
 
@@ -18,5 +19,6 @@ router.use(ragRoutes);
 router.use(teamRoutes);
 router.use(calendarOauthRoutes);
 router.use(storedRoutes);
+router.use(musicControlRoutes);
 
 export default router;

@@ -137,10 +137,43 @@ export function getNowPlaying(guildId: string): Track | null {
   return queue.tracks[0];
 }
 
+export function addTrackToQueue(guildId: string, track: Track): number | null {
+  const queue = queues.get(guildId);
+  if (!queue) return null;
+
+  // 웹에서 추가한 곡도 유저 요청 곡처럼 autoplay 곡들 앞에 삽입
+  const firstAutoplayIdx = queue.tracks.findIndex((t, i) => i > 0 && t.requestedBy.startsWith("Autoplay"));
+  if (firstAutoplayIdx > 0) {
+    queue.tracks.splice(firstAutoplayIdx, 0, track);
+  } else {
+    queue.tracks.push(track);
+  }
+  return queue.tracks.indexOf(track);
+}
+
 export function removeTrack(guildId: string, index: number): Track | null {
   const queue = queues.get(guildId);
   if (!queue || index < 1 || index >= queue.tracks.length) return null;
   return queue.tracks.splice(index, 1)[0];
+}
+
+export function moveTrack(guildId: string, from: number, to: number): Track | null {
+  const queue = queues.get(guildId);
+  if (!queue || from < 1 || to < 1 || from >= queue.tracks.length || to >= queue.tracks.length) return null;
+  if (from === to) return queue.tracks[from];
+  const [track] = queue.tracks.splice(from, 1);
+  queue.tracks.splice(to, 0, track);
+  return track;
+}
+
+export function getActiveMusicQueues(): Array<{ guildId: string; current: Track | null; trackCount: number; autoplay: boolean; autoplayGenre: string | null }> {
+  return [...queues.entries()].map(([guildId, queue]) => ({
+    guildId,
+    current: queue.tracks[0] || null,
+    trackCount: queue.tracks.length,
+    autoplay: queue.autoplay,
+    autoplayGenre: queue.autoplayGenre,
+  }));
 }
 
 export function setAutoplay(guildId: string, genre: string | null): boolean {

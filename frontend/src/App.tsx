@@ -54,6 +54,7 @@ function App() {
         <Route path="/admin/stored" element={<AdminLayout><Stored /></AdminLayout>} />
         <Route path="/admin/rag" element={<AdminLayout><Rag /></AdminLayout>} />
         <Route path="/admin/settings" element={<AdminLayout><Settings /></AdminLayout>} />
+        <Route path="/admin/music" element={<AdminLayout><Music editable /></AdminLayout>} />
 
         {/* Redirects */}
         <Route path="/" element={<Navigate to="/chat" replace />} />
