@@ -43,15 +43,25 @@ interface MusicQueueDetail {
   autoplay: { enabled: boolean; genre: string | null }
 }
 
-const MEDAL = ['🥇', '🥈', '🥉']
-const COLORS = ['#FF6B9D', '#C084FC', '#60D9FA', '#34D399', '#FBBF24', '#FB923C', '#F87171']
+function youtubeThumbnailUrl(url: string): string {
+  try {
+    const u = new URL(url)
+    const id = u.hostname === 'youtu.be' ? u.pathname.slice(1) : u.searchParams.get('v')
+    return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : ''
+  } catch {
+    return ''
+  }
+}
+
+function trackThumbnail(track: { thumbnail?: string; url: string }): string {
+  return track.thumbnail || youtubeThumbnailUrl(track.url)
+}
 
 export default function Music({ editable = false }: { editable?: boolean }) {
   const [logs, setLogs] = useState<MusicLogEntry[]>([])
   const [stats, setStats] = useState<MusicStats | null>(null)
   const [tab, setTab] = useState<'playlist' | 'history' | 'stats'>(editable ? 'playlist' : 'history')
   const [page, setPage] = useState(0)
-  const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [queues, setQueues] = useState<ActiveQueueSummary[]>([])
   const [selectedGuildId, setSelectedGuildId] = useState<string>('')
   const [queueDetail, setQueueDetail] = useState<MusicQueueDetail | null>(null)
@@ -147,595 +157,484 @@ export default function Music({ editable = false }: { editable?: boolean }) {
   return (
     <>
       <style>{`
-        @keyframes music-float {
-          0%, 100% { transform: translateY(0px) rotate(0deg); }
-          33% { transform: translateY(-6px) rotate(1deg); }
-          66% { transform: translateY(-3px) rotate(-1deg); }
-        }
-        @keyframes music-pop-in {
-          0% { opacity: 0; transform: scale(0.8) translateY(12px); }
-          60% { transform: scale(1.03) translateY(-2px); }
-          100% { opacity: 1; transform: scale(1) translateY(0); }
-        }
-        @keyframes music-wiggle {
-          0%, 100% { transform: rotate(0deg); }
-          25% { transform: rotate(-3deg); }
-          75% { transform: rotate(3deg); }
-        }
-        @keyframes music-bounce-in {
-          0% { opacity: 0; transform: scale(0.3); }
-          50% { transform: scale(1.08); }
-          70% { transform: scale(0.95); }
-          100% { opacity: 1; transform: scale(1); }
-        }
-        @keyframes note-float {
-          0% { opacity: 0; transform: translateY(0) rotate(0deg) scale(0.5); }
-          20% { opacity: 1; }
-          100% { opacity: 0; transform: translateY(-60px) rotate(25deg) scale(1.2); }
-        }
-        @keyframes bar-dance {
-          0%, 100% { height: 12px; }
-          50% { height: var(--bar-h, 28px); }
-        }
-        @keyframes gradient-shift {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
-        }
-
         .music-page {
-          --joy-pink: #FF6B9D;
-          --joy-purple: #C084FC;
-          --joy-blue: #60D9FA;
-          --joy-green: #34D399;
-          --joy-yellow: #FBBF24;
-          --joy-orange: #FB923C;
-          --joy-bg: #FFF8F0;
-          --joy-card: #FFFFFF;
-          --joy-text: #2D1B4E;
-          --joy-text-soft: #8B7BA3;
-          --joy-border: rgba(192, 132, 252, 0.2);
-          --joy-font: 'Gaegu', cursive;
-          --joy-font-title: 'Bagel Fat One', cursive;
+          --music-bg: #f7f8fa;
+          --music-surface: #ffffff;
+          --music-surface-muted: #f2f4f6;
+          --music-text: #191f28;
+          --music-text-secondary: #4e5968;
+          --music-text-tertiary: #8b95a1;
+          --music-border: #e5e8eb;
+          --music-blue: #3182f6;
+          --music-blue-weak: #e8f3ff;
+          --music-red: #f04452;
+          --music-red-weak: #fff0f1;
+          --music-green: #00a661;
+          --music-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 28px rgba(0, 0, 0, 0.06);
 
           min-height: 100vh;
-          background: var(--joy-bg);
-          background-image:
-            radial-gradient(circle at 15% 20%, rgba(255, 107, 157, 0.08) 0%, transparent 50%),
-            radial-gradient(circle at 85% 30%, rgba(96, 217, 250, 0.08) 0%, transparent 50%),
-            radial-gradient(circle at 50% 80%, rgba(192, 132, 252, 0.06) 0%, transparent 50%);
-          font-family: var(--joy-font);
-          color: var(--joy-text);
-          padding: 0 20px 60px;
-          overflow-x: hidden;
+          background: var(--music-bg);
+          color: var(--music-text);
+          padding: 0 24px 64px;
+          font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Segoe UI", sans-serif;
         }
 
         .music-header {
-          text-align: center;
-          padding: 48px 0 32px;
-          position: relative;
-          animation: music-pop-in 0.6s ease-out;
+          max-width: 1080px;
+          margin: 0 auto;
+          padding: 56px 0 28px;
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-end;
+          gap: 24px;
         }
         .music-header h1 {
-          font-family: var(--joy-font-title);
-          font-size: 3.2rem;
-          background: linear-gradient(135deg, var(--joy-pink), var(--joy-purple), var(--joy-blue));
-          background-size: 200% 200%;
-          animation: gradient-shift 4s ease infinite;
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
           margin: 0;
-          letter-spacing: -1px;
-          filter: drop-shadow(0 2px 8px rgba(192, 132, 252, 0.3));
+          font-size: clamp(2rem, 4vw, 3rem);
+          line-height: 1.08;
+          letter-spacing: -0.04em;
+          font-weight: 800;
+          color: var(--music-text);
         }
         .music-header p {
-          font-size: 1.15rem;
-          color: var(--joy-text-soft);
-          margin: 8px 0 0;
-          font-weight: 400;
+          margin: 12px 0 0;
+          color: var(--music-text-secondary);
+          font-size: 1rem;
+          line-height: 1.6;
+          letter-spacing: -0.01em;
         }
-
-        .music-dancing-bars {
-          display: flex;
-          gap: 4px;
-          justify-content: center;
-          margin-top: 16px;
-          height: 32px;
-          align-items: flex-end;
-        }
-        .music-dancing-bars span {
-          width: 6px;
-          border-radius: 3px;
-          animation: bar-dance 0.8s ease-in-out infinite;
-        }
-
         .music-nav {
-          display: flex;
-          justify-content: center;
-          gap: 10px;
-          margin-bottom: 28px;
-          animation: music-pop-in 0.6s ease-out 0.1s both;
+          max-width: 1080px;
+          margin: 0 auto 20px;
+          display: inline-flex;
+          padding: 4px;
+          gap: 2px;
+          border: 1px solid var(--music-border);
+          border-radius: 14px;
+          background: var(--music-surface);
         }
         .music-nav button {
-          font-family: var(--joy-font);
-          font-size: 1.2rem;
+          min-height: 42px;
+          padding: 0 16px;
+          border: 0;
+          border-radius: 10px;
+          background: transparent;
+          color: var(--music-text-secondary);
+          font-size: 0.95rem;
           font-weight: 700;
-          padding: 10px 28px;
-          border-radius: 50px;
-          border: 3px solid transparent;
+          letter-spacing: -0.01em;
           cursor: pointer;
-          transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-          position: relative;
-          overflow: hidden;
+          transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
         }
-        .music-nav button:hover {
-          transform: scale(1.05) translateY(-2px);
-        }
-        .music-nav button:active {
-          transform: scale(0.97);
-        }
-        .music-nav button.active-history {
-          background: linear-gradient(135deg, var(--joy-pink), var(--joy-purple));
-          color: white;
-          border-color: rgba(255,255,255,0.3);
-          box-shadow: 0 4px 20px rgba(255, 107, 157, 0.35);
-        }
+        .music-nav button:hover { background: var(--music-surface-muted); }
+        .music-nav button.active-history,
         .music-nav button.active-stats {
-          background: linear-gradient(135deg, var(--joy-blue), var(--joy-green));
-          color: white;
-          border-color: rgba(255,255,255,0.3);
-          box-shadow: 0 4px 20px rgba(96, 217, 250, 0.35);
+          background: var(--music-blue);
+          color: #ffffff;
+          box-shadow: 0 6px 14px rgba(49, 130, 246, 0.22);
         }
-        .music-nav button.inactive {
-          background: white;
-          color: var(--joy-text-soft);
-          border-color: var(--joy-border);
-          box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        }
+        .music-nav button.inactive { color: var(--music-text-secondary); }
         .music-nav button .tab-count {
-          font-size: 0.75rem;
-          opacity: 0.7;
           margin-left: 6px;
+          opacity: 0.72;
+          font-size: 0.82rem;
+          font-weight: 700;
         }
 
         .music-chat-link {
           position: fixed;
-          bottom: 24px;
           right: 24px;
-          width: 60px;
-          height: 60px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, var(--joy-yellow), var(--joy-orange));
-          border: 3px solid white;
-          box-shadow: 0 4px 24px rgba(251, 146, 60, 0.4);
-          display: flex;
+          bottom: 24px;
+          z-index: 20;
+          min-width: 112px;
+          height: 48px;
+          padding: 0 18px;
+          border-radius: 999px;
+          background: var(--music-text);
+          color: #ffffff;
+          box-shadow: 0 12px 28px rgba(25, 31, 40, 0.22);
+          display: inline-flex;
           align-items: center;
           justify-content: center;
-          font-size: 1.6rem;
+          font-size: 0.95rem;
+          font-weight: 800;
+          letter-spacing: -0.01em;
           cursor: pointer;
-          transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-          z-index: 100;
-          animation: music-bounce-in 0.5s ease-out 0.8s both;
+          transition: transform 0.15s ease, background 0.15s ease;
         }
-        .music-chat-link:hover {
-          transform: scale(1.15) rotate(-8deg);
-          box-shadow: 0 6px 32px rgba(251, 146, 60, 0.5);
-        }
-        .music-chat-link:active {
-          transform: scale(0.9);
+        .music-chat-link::before { content: 'Chat'; }
+        .music-chat-link:hover { transform: translateY(-2px); background: #333d4b; }
+
+        .music-list,
+        .playlist-panel,
+        .music-stats,
+        .music-total-banner {
+          max-width: 1080px;
+          margin-left: auto;
+          margin-right: auto;
         }
 
-        /* ── History Cards ── */
         .music-list {
-          max-width: 720px;
-          margin: 0 auto;
-          display: flex;
-          flex-direction: column;
+          display: grid;
           gap: 10px;
         }
         .music-card {
-          display: flex;
+          display: grid;
+          grid-template-columns: 56px minmax(0, 1fr) auto auto;
           align-items: center;
-          gap: 14px;
-          padding: 12px 16px;
-          background: var(--joy-card);
-          border-radius: 20px;
-          border: 2.5px solid var(--joy-border);
-          cursor: pointer;
+          gap: 16px;
+          padding: 14px 18px;
+          background: var(--music-surface);
+          border: 1px solid var(--music-border);
+          border-radius: 18px;
           text-decoration: none;
           color: inherit;
-          transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-          animation: music-pop-in 0.4s ease-out both;
-          position: relative;
-          overflow: hidden;
+          transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
         }
-        .music-card::before {
-          content: '';
-          position: absolute;
-          inset: 0;
-          border-radius: 18px;
-          background: linear-gradient(135deg, rgba(255,107,157,0.05), rgba(96,217,250,0.05));
-          opacity: 0;
-          transition: opacity 0.3s;
-        }
-        .music-card:hover::before { opacity: 1; }
         .music-card:hover {
-          transform: translateY(-3px) scale(1.01);
-          border-color: var(--joy-purple);
-          box-shadow: 0 8px 30px rgba(192, 132, 252, 0.15);
+          border-color: #d1d6db;
+          box-shadow: var(--music-shadow);
+          transform: translateY(-1px);
         }
-        .music-card:active {
-          transform: scale(0.98);
-        }
-        .music-card-thumb {
-          width: 52px;
-          height: 52px;
+        .music-card-thumb,
+        .music-card-no-thumb {
+          width: 56px;
+          height: 56px;
           border-radius: 14px;
           object-fit: cover;
           flex-shrink: 0;
-          border: 2px solid rgba(192, 132, 252, 0.15);
+          background: linear-gradient(135deg, #eef2f7, #dfe5ec);
         }
         .music-card-no-thumb {
-          width: 52px;
-          height: 52px;
-          border-radius: 14px;
-          flex-shrink: 0;
-          background: linear-gradient(135deg, var(--joy-purple), var(--joy-pink));
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 1.4rem;
+          color: var(--music-text-tertiary);
+          font-size: 0;
         }
-        .music-card-info {
-          flex: 1;
-          min-width: 0;
-          position: relative;
-          z-index: 1;
+        .music-card-no-thumb::before {
+          content: '';
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          border: 5px solid #b0b8c1;
+          box-sizing: border-box;
         }
-        .music-card-title {
-          font-size: 1.05rem;
-          font-weight: 700;
+        .music-card-info { min-width: 0; }
+        .music-card-title,
+        .playlist-title,
+        .stats-name {
+          font-size: 1rem;
+          font-weight: 750;
+          line-height: 1.35;
+          letter-spacing: -0.02em;
+          color: var(--music-text);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
-          color: var(--joy-text);
+        }
+        .music-card-sub,
+        .playlist-meta,
+        .stats-artist {
+          margin-top: 4px;
+          color: var(--music-text-tertiary);
+          font-size: 0.86rem;
+          line-height: 1.4;
         }
         .music-card-sub {
-          font-size: 0.85rem;
-          color: var(--joy-text-soft);
-          margin-top: 2px;
           display: flex;
           gap: 10px;
           align-items: center;
         }
         .music-card-badge {
-          font-size: 0.75rem;
-          padding: 2px 10px;
-          border-radius: 20px;
-          font-weight: 700;
-          flex-shrink: 0;
-          position: relative;
-          z-index: 1;
-        }
-        .music-card-badge.user {
-          background: linear-gradient(135deg, rgba(192, 132, 252, 0.15), rgba(255, 107, 157, 0.15));
-          color: #9333EA;
+          padding: 6px 10px;
+          border-radius: 999px;
+          font-size: 0.78rem;
+          font-weight: 750;
+          background: var(--music-blue-weak);
+          color: var(--music-blue);
+          white-space: nowrap;
         }
         .music-card-badge.auto {
-          background: rgba(139, 123, 163, 0.1);
-          color: var(--joy-text-soft);
+          background: var(--music-surface-muted);
+          color: var(--music-text-tertiary);
         }
         .music-card-time {
-          font-size: 0.78rem;
-          color: var(--joy-text-soft);
-          opacity: 0.7;
-          flex-shrink: 0;
-          position: relative;
-          z-index: 1;
+          color: var(--music-text-tertiary);
+          font-size: 0.84rem;
+          white-space: nowrap;
         }
 
-        /* ── Pagination ── */
         .music-pagination {
           display: flex;
           justify-content: center;
           align-items: center;
           gap: 12px;
           margin-top: 24px;
-          animation: music-pop-in 0.4s ease-out 0.3s both;
         }
-        .music-pagination button {
-          font-family: var(--joy-font);
-          font-size: 1.1rem;
-          font-weight: 700;
-          padding: 8px 20px;
-          border-radius: 50px;
-          border: 2.5px solid var(--joy-border);
-          background: white;
-          color: var(--joy-text);
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        .music-pagination button:hover:not(:disabled) {
-          border-color: var(--joy-purple);
-          background: rgba(192, 132, 252, 0.05);
-          transform: scale(1.05);
-        }
-        .music-pagination button:disabled {
-          opacity: 0.3;
-          cursor: default;
-        }
-        .music-pagination .page-info {
-          font-size: 1rem;
-          font-weight: 700;
-          color: var(--joy-text-soft);
-        }
-
-        /* ── Stats ── */
-        .music-stats {
-          max-width: 720px;
-          margin: 0 auto;
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 20px;
-          animation: music-pop-in 0.5s ease-out;
-        }
-        @media (max-width: 600px) {
-          .music-stats { grid-template-columns: 1fr; }
-        }
-        .stats-card {
-          background: var(--joy-card);
-          border-radius: 24px;
-          border: 2.5px solid var(--joy-border);
-          padding: 24px;
-          transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-        .stats-card:hover {
-          transform: translateY(-4px);
-        }
-        .stats-card h3 {
-          font-family: var(--joy-font-title);
-          font-size: 1.3rem;
-          margin: 0 0 16px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-        .stats-card.tracks h3 { color: var(--joy-pink); }
-        .stats-card.users h3 { color: var(--joy-blue); }
-
-        .stats-row {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 8px 0;
-          border-bottom: 1.5px dashed rgba(192, 132, 252, 0.12);
-          animation: music-pop-in 0.3s ease-out both;
-        }
-        .stats-row:last-child { border-bottom: none; }
-        .stats-rank {
-          font-size: 1.3rem;
-          width: 32px;
-          text-align: center;
-          flex-shrink: 0;
-        }
-        .stats-rank.number {
-          font-family: var(--joy-font-title);
-          font-size: 1rem;
-          color: var(--joy-text-soft);
-        }
-        .stats-name {
-          flex: 1;
-          font-weight: 700;
-          font-size: 0.95rem;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .stats-artist {
-          font-size: 0.75rem;
-          color: var(--joy-text-soft);
-          font-weight: 400;
-        }
-        .stats-count {
-          font-family: var(--joy-font-title);
-          font-size: 1.1rem;
-          padding: 2px 12px;
-          border-radius: 20px;
-          flex-shrink: 0;
-        }
-        .stats-card.tracks .stats-count {
-          background: linear-gradient(135deg, rgba(255,107,157,0.15), rgba(192,132,252,0.15));
-          color: var(--joy-pink);
-        }
-        .stats-card.users .stats-count {
-          background: linear-gradient(135deg, rgba(96,217,250,0.15), rgba(52,211,153,0.15));
-          color: #0891B2;
-        }
-
-        .music-total-banner {
-          text-align: center;
-          margin-bottom: 20px;
-          animation: music-pop-in 0.5s ease-out;
-        }
-        .music-total-banner .number {
-          font-family: var(--joy-font-title);
-          font-size: 2.5rem;
-          background: linear-gradient(135deg, var(--joy-pink), var(--joy-purple));
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        }
-        .music-total-banner .label {
-          font-size: 1rem;
-          color: var(--joy-text-soft);
-        }
-
-        .music-empty {
-          text-align: center;
-          padding: 60px 20px;
-          animation: music-pop-in 0.5s ease-out;
-        }
-        .music-empty .icon {
-          font-size: 4rem;
-          animation: music-float 3s ease-in-out infinite;
-        }
-        .music-empty p {
-          font-size: 1.2rem;
-          color: var(--joy-text-soft);
-          margin-top: 12px;
-        }
-
-        /* ── Playlist Editor ── */
-        .playlist-panel {
-          max-width: 820px;
-          margin: 0 auto;
-          background: var(--joy-card);
-          border: 2.5px solid var(--joy-border);
-          border-radius: 28px;
-          padding: 20px;
-          animation: music-pop-in 0.45s ease-out;
-        }
-        .playlist-toolbar {
-          display: flex;
-          gap: 10px;
-          align-items: center;
-          flex-wrap: wrap;
-          margin-bottom: 16px;
-        }
-        .playlist-toolbar select,
-        .playlist-toolbar input {
-          font-family: var(--joy-font);
-          font-size: 1rem;
-          border: 2px solid var(--joy-border);
-          border-radius: 16px;
-          padding: 10px 12px;
-          background: white;
-          color: var(--joy-text);
-        }
-        .playlist-toolbar input { flex: 1; min-width: 180px; }
+        .music-pagination button,
         .playlist-toolbar button,
         .playlist-actions button,
         .playlist-autoplay button {
-          font-family: var(--joy-font);
-          font-weight: 700;
+          min-height: 38px;
           border: 0;
-          border-radius: 16px;
-          padding: 10px 14px;
-          background: linear-gradient(135deg, var(--joy-blue), var(--joy-green));
-          color: white;
+          border-radius: 10px;
+          padding: 0 14px;
+          background: var(--music-surface-muted);
+          color: var(--music-text-secondary);
+          font-size: 0.9rem;
+          font-weight: 750;
           cursor: pointer;
-          transition: transform 0.2s, opacity 0.2s;
+          transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
         }
+        .music-pagination button:hover:not(:disabled),
         .playlist-toolbar button:hover:not(:disabled),
         .playlist-actions button:hover:not(:disabled),
-        .playlist-autoplay button:hover:not(:disabled) { transform: translateY(-2px); }
+        .playlist-autoplay button:hover:not(:disabled) {
+          background: #e5e8eb;
+          transform: translateY(-1px);
+        }
+        .music-pagination button:disabled,
         .playlist-toolbar button:disabled,
         .playlist-actions button:disabled,
-        .playlist-autoplay button:disabled { opacity: 0.45; cursor: default; }
-        .playlist-status {
-          min-height: 22px;
-          color: var(--joy-text-soft);
-          font-size: 0.95rem;
-          margin: 8px 0 12px;
+        .playlist-autoplay button:disabled {
+          opacity: 0.38;
+          cursor: default;
+          transform: none;
         }
+        .music-pagination .page-info {
+          color: var(--music-text-tertiary);
+          font-size: 0.9rem;
+          font-weight: 700;
+        }
+
+        .music-total-banner {
+          background: var(--music-surface);
+          border: 1px solid var(--music-border);
+          border-radius: 22px;
+          padding: 24px 28px;
+          margin-bottom: 16px;
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 16px;
+        }
+        .music-total-banner .number {
+          font-size: 2.4rem;
+          line-height: 1;
+          letter-spacing: -0.04em;
+          font-weight: 850;
+          color: var(--music-blue);
+        }
+        .music-total-banner .label {
+          color: var(--music-text-secondary);
+          font-size: 1rem;
+          font-weight: 650;
+        }
+        .music-stats {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+          gap: 16px;
+        }
+        .stats-card {
+          background: var(--music-surface);
+          border: 1px solid var(--music-border);
+          border-radius: 22px;
+          padding: 20px;
+        }
+        .stats-card h3 {
+          margin: 0 0 14px;
+          color: var(--music-text);
+          font-size: 1.05rem;
+          font-weight: 800;
+          letter-spacing: -0.02em;
+        }
+        .stats-row {
+          display: grid;
+          grid-template-columns: 36px minmax(0, 1fr) auto;
+          align-items: center;
+          gap: 12px;
+          min-height: 44px;
+          border-top: 1px solid var(--music-border);
+        }
+        .stats-row:first-of-type { border-top: 0; }
+        .stats-rank {
+          color: var(--music-text-tertiary);
+          font-size: 0.9rem;
+          font-weight: 800;
+          text-align: center;
+        }
+        .stats-rank.number { font-size: 0.9rem; }
+        .stats-count {
+          min-width: 34px;
+          padding: 5px 9px;
+          border-radius: 999px;
+          background: var(--music-blue-weak);
+          color: var(--music-blue);
+          text-align: center;
+          font-size: 0.84rem;
+          font-weight: 800;
+        }
+        .stats-empty {
+          margin: 0;
+          padding: 28px 12px;
+          color: var(--music-text-tertiary);
+          text-align: center;
+          font-size: 0.94rem;
+        }
+
+        .music-empty,
+        .playlist-empty-small {
+          background: var(--music-surface);
+          border: 1px solid var(--music-border);
+          border-radius: 22px;
+          padding: 42px 20px;
+          color: var(--music-text-tertiary);
+          text-align: center;
+          font-size: 0.98rem;
+          line-height: 1.6;
+        }
+        .music-empty .icon { display: none; }
+        .music-empty p { margin: 0; }
+
+        .playlist-panel {
+          background: var(--music-surface);
+          border: 1px solid var(--music-border);
+          border-radius: 24px;
+          padding: 20px;
+          box-shadow: 0 1px 1px rgba(0,0,0,0.02);
+        }
+        .playlist-toolbar {
+          display: grid;
+          grid-template-columns: minmax(180px, 260px) minmax(220px, 1fr) auto auto;
+          gap: 10px;
+          align-items: center;
+          margin-bottom: 14px;
+        }
+        .playlist-toolbar select,
+        .playlist-toolbar input {
+          min-height: 44px;
+          border: 1px solid var(--music-border);
+          border-radius: 12px;
+          padding: 0 14px;
+          background: var(--music-surface);
+          color: var(--music-text);
+          font-size: 0.95rem;
+          outline: none;
+          transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .playlist-toolbar select:focus,
+        .playlist-toolbar input:focus {
+          border-color: var(--music-blue);
+          box-shadow: 0 0 0 3px rgba(49, 130, 246, 0.12);
+        }
+        .playlist-toolbar button:first-of-type {
+          background: var(--music-blue);
+          color: white;
+        }
+        .playlist-toolbar button:first-of-type:hover:not(:disabled) { background: #1b64da; }
         .playlist-autoplay {
           display: flex;
-          gap: 8px;
           flex-wrap: wrap;
           align-items: center;
-          margin-bottom: 16px;
+          gap: 8px;
           padding: 12px;
-          border-radius: 20px;
-          background: rgba(192, 132, 252, 0.08);
+          margin-bottom: 12px;
+          border-radius: 16px;
+          background: var(--music-surface-muted);
         }
-        .playlist-autoplay span { font-weight: 700; color: var(--joy-text-soft); }
-        .playlist-empty-small {
-          text-align: center;
-          padding: 34px 12px;
-          color: var(--joy-text-soft);
-          font-size: 1.05rem;
+        .playlist-autoplay span {
+          margin-right: 4px;
+          color: var(--music-text-secondary);
+          font-size: 0.9rem;
+          font-weight: 750;
+        }
+        .playlist-status {
+          min-height: 22px;
+          margin: 6px 0 10px;
+          color: var(--music-text-tertiary);
+          font-size: 0.9rem;
         }
         .playlist-track {
-          display: flex;
-          gap: 12px;
+          display: grid;
+          grid-template-columns: 48px 56px minmax(0, 1fr) auto;
           align-items: center;
-          padding: 12px 0;
-          border-top: 1.5px dashed rgba(192, 132, 252, 0.16);
+          gap: 14px;
+          padding: 14px 0;
+          border-top: 1px solid var(--music-border);
         }
         .playlist-track:first-of-type { border-top: 0; }
         .playlist-track.current {
-          background: rgba(255, 107, 157, 0.07);
-          margin: 0 -10px;
-          padding: 12px 10px;
-          border-radius: 18px;
+          margin: 0 -8px;
+          padding-left: 8px;
+          padding-right: 8px;
+          border-radius: 16px;
+          background: var(--music-blue-weak);
+          border-top-color: transparent;
         }
         .playlist-index {
-          width: 34px;
-          font-family: var(--joy-font-title);
-          color: var(--joy-purple);
+          color: var(--music-text-tertiary);
+          font-size: 0.8rem;
+          font-weight: 850;
           text-align: center;
-          flex-shrink: 0;
         }
-        .playlist-info { flex: 1; min-width: 0; }
-        .playlist-title {
-          font-weight: 700;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        .playlist-meta {
-          color: var(--joy-text-soft);
-          font-size: 0.85rem;
-          margin-top: 2px;
-        }
+        .playlist-track.current .playlist-index { color: var(--music-blue); }
+        .playlist-info { min-width: 0; }
         .playlist-actions {
           display: flex;
+          align-items: center;
           gap: 6px;
-          flex-shrink: 0;
-        }
-        .playlist-actions button {
-          background: rgba(139, 123, 163, 0.12);
-          color: var(--joy-text);
-          padding: 8px 10px;
         }
         .playlist-actions button.remove {
-          background: rgba(248, 113, 113, 0.16);
-          color: #B91C1C;
+          background: var(--music-red-weak);
+          color: var(--music-red);
         }
-        @media (max-width: 600px) {
-          .playlist-panel { padding: 14px; border-radius: 22px; }
-          .playlist-toolbar { align-items: stretch; }
-          .playlist-toolbar select,
-          .playlist-toolbar input,
-          .playlist-toolbar button { width: 100%; }
-          .playlist-track { align-items: flex-start; }
-          .playlist-actions { flex-direction: column; }
-        }
+        .playlist-actions button.remove:hover:not(:disabled) { background: #ffe1e4; }
 
-        /* ── Notes (floating decorations) ── */
-        .music-note {
-          position: fixed;
-          pointer-events: none;
-          font-size: 1.4rem;
-          animation: note-float 2.5s ease-out forwards;
-          z-index: 50;
+        .music-note { display: none; }
+
+        @media (max-width: 760px) {
+          .music-page { padding: 0 16px 76px; }
+          .music-header {
+            padding-top: 36px;
+            display: block;
+          }
+          .music-nav {
+            width: 100%;
+            display: flex;
+            overflow-x: auto;
+            justify-content: flex-start;
+          }
+          .music-nav button { white-space: nowrap; }
+          .playlist-toolbar { grid-template-columns: 1fr; }
+          .music-card {
+            grid-template-columns: 48px minmax(0, 1fr) auto;
+            gap: 12px;
+            padding: 12px;
+          }
+          .music-card-thumb,
+          .music-card-no-thumb { width: 48px; height: 48px; border-radius: 12px; }
+          .music-card-time { display: none; }
+          .music-card-badge { font-size: 0.72rem; padding: 5px 8px; }
+          .playlist-track {
+            grid-template-columns: 36px 48px minmax(0, 1fr);
+          }
+          .playlist-actions {
+            grid-column: 2 / -1;
+            justify-content: flex-start;
+          }
+          .music-stats { grid-template-columns: 1fr; }
+          .music-total-banner { display: block; }
+          .music-total-banner .label { margin-top: 8px; }
         }
       `}</style>
 
       <div className="music-page">
         {/* Header */}
         <div className="music-header">
-          <h1>TORO Jukebox</h1>
-          <p>우리가 함께 들은 노래들</p>
-          <div className="music-dancing-bars">
-            {[0, 1, 2, 3, 4].map(i => (
-              <span key={i} style={{
-                background: COLORS[i],
-                animationDelay: `${i * 0.15}s`,
-                ['--bar-h' as any]: `${20 + Math.random() * 16}px`,
-              }} />
-            ))}
+          <div>
+            <h1>TORO Music</h1>
+            <p>현재 재생 중인 큐와 재생 기록을 한 곳에서 관리합니다.</p>
           </div>
         </div>
 
@@ -746,20 +645,20 @@ export default function Music({ editable = false }: { editable?: boolean }) {
               className={tab === 'playlist' ? 'active-history' : 'inactive'}
               onClick={() => { setTab('playlist'); setPage(0); refreshSelectedQueue() }}
             >
-              📻 현재 플레이리스트 <span className="tab-count">{queueDetail?.tracks.length || queues[0]?.trackCount || 0}</span>
+              현재 플레이리스트 <span className="tab-count">{queueDetail?.tracks.length || queues[0]?.trackCount || 0}</span>
             </button>
           )}
           <button
             className={tab === 'history' ? 'active-history' : 'inactive'}
             onClick={() => { setTab('history'); setPage(0) }}
           >
-            🎵 기록 <span className="tab-count">{logs.length}</span>
+            재생 기록 <span className="tab-count">{logs.length}</span>
           </button>
           <button
             className={tab === 'stats' ? 'active-stats' : 'inactive'}
             onClick={() => { setTab('stats'); setPage(0) }}
           >
-            🏆 통계 <span className="tab-count">{stats?.totalPlays || 0}</span>
+            통계 <span className="tab-count">{stats?.totalPlays || 0}</span>
           </button>
         </div>
 
@@ -809,10 +708,10 @@ export default function Music({ editable = false }: { editable?: boolean }) {
                 ) : queueDetail.tracks.map((track, index) => (
                   <div key={`${track.url}-${index}`} className={`playlist-track ${index === 0 ? 'current' : ''}`}>
                     <div className="playlist-index">{index === 0 ? 'NOW' : index}</div>
-                    {track.thumbnail ? (
-                      <img src={track.thumbnail} alt="" className="music-card-thumb" />
+                    {trackThumbnail(track) ? (
+                      <img src={trackThumbnail(track)} alt="" className="music-card-thumb" />
                     ) : (
-                      <div className="music-card-no-thumb">🎵</div>
+                      <div className="music-card-no-thumb" />
                     )}
                     <div className="playlist-info">
                       <div className="playlist-title">{track.title}</div>
@@ -835,8 +734,7 @@ export default function Music({ editable = false }: { editable?: boolean }) {
           <div className="music-list">
             {paged.length === 0 ? (
               <div className="music-empty">
-                <div className="icon">🎧</div>
-                <p>아직 재생 기록이 없어요!</p>
+                <p>아직 재생 기록이 없습니다. 디스코드에서 음악을 재생하면 이곳에 기록됩니다.</p>
               </div>
             ) : paged.map((log, i) => (
               <a
@@ -845,14 +743,11 @@ export default function Music({ editable = false }: { editable?: boolean }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="music-card"
-                style={{ animationDelay: `${i * 0.04}s` }}
-                onMouseEnter={() => setHoveredId(log.id)}
-                onMouseLeave={() => setHoveredId(null)}
               >
-                {log.thumbnail ? (
-                  <img src={log.thumbnail} alt="" className="music-card-thumb" />
+                {trackThumbnail(log) ? (
+                  <img src={trackThumbnail(log)} alt="" className="music-card-thumb" />
                 ) : (
-                  <div className="music-card-no-thumb">🎵</div>
+                  <div className="music-card-no-thumb" />
                 )}
                 <div className="music-card-info">
                   <div className="music-card-title">{log.title}</div>
@@ -862,18 +757,17 @@ export default function Music({ editable = false }: { editable?: boolean }) {
                   </div>
                 </div>
                 <span className={`music-card-badge ${log.requestedBy.startsWith('Autoplay') ? 'auto' : 'user'}`}>
-                  {log.requestedBy.startsWith('Autoplay') ? '🤖' : log.requestedBy}
+                  {log.requestedBy.startsWith('Autoplay') ? 'Auto' : log.requestedBy}
                 </span>
                 <span className="music-card-time">{formatTime(log.timestamp)}</span>
-                {hoveredId === log.id && <FloatingNote />}
               </a>
             ))}
 
             {logs.length > perPage && (
               <div className="music-pagination">
-                <button disabled={page === 0} onClick={() => setPage(p => p - 1)}>◁ 이전</button>
+                <button disabled={page === 0} onClick={() => setPage(p => p - 1)}>이전</button>
                 <span className="page-info">{page + 1} / {totalPages}</span>
-                <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>다음 ▷</button>
+                <button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>다음</button>
               </div>
             )}
           </div>
@@ -884,18 +778,18 @@ export default function Music({ editable = false }: { editable?: boolean }) {
           <>
             <div className="music-total-banner">
               <div className="number">{stats.totalPlays}</div>
-              <div className="label">곡이 재생되었어요!</div>
+              <div className="label">누적 재생</div>
             </div>
 
             <div className="music-stats">
               <div className="stats-card tracks">
-                <h3>🎵 인기 곡</h3>
+                <h3>인기 곡</h3>
                 {stats.topTracks.length === 0 ? (
-                  <p style={{ color: 'var(--joy-text-soft)', textAlign: 'center', padding: 20 }}>데이터가 없어요</p>
+                  <p className="stats-empty">데이터가 없습니다.</p>
                 ) : stats.topTracks.slice(0, 10).map((t, i) => (
-                  <div key={i} className="stats-row" style={{ animationDelay: `${i * 0.05}s` }}>
+                  <div key={i} className="stats-row">
                     <span className={`stats-rank ${i >= 3 ? 'number' : ''}`}>
-                      {i < 3 ? MEDAL[i] : i + 1}
+                      {i + 1}
                     </span>
                     <div className="stats-name">
                       {t.title}
@@ -907,13 +801,13 @@ export default function Music({ editable = false }: { editable?: boolean }) {
               </div>
 
               <div className="stats-card users">
-                <h3>🎧 음악 대장</h3>
+                <h3>상위 요청자</h3>
                 {stats.topUsers.length === 0 ? (
-                  <p style={{ color: 'var(--joy-text-soft)', textAlign: 'center', padding: 20 }}>데이터가 없어요</p>
+                  <p className="stats-empty">데이터가 없습니다.</p>
                 ) : stats.topUsers.map((u, i) => (
-                  <div key={i} className="stats-row" style={{ animationDelay: `${i * 0.05}s` }}>
+                  <div key={i} className="stats-row">
                     <span className={`stats-rank ${i >= 3 ? 'number' : ''}`}>
-                      {i < 3 ? MEDAL[i] : i + 1}
+                      {i + 1}
                     </span>
                     <span className="stats-name">{u.name}</span>
                     <span className="stats-count">{u.count}</span>
@@ -926,22 +820,9 @@ export default function Music({ editable = false }: { editable?: boolean }) {
 
         {/* Chat FAB */}
         <div className="music-chat-link" onClick={() => navigate('/chat')} title="채팅하러 가기">
-          💬
         </div>
       </div>
     </>
-  )
-}
-
-function FloatingNote() {
-  const notes = ['♪', '♫', '♬', '🎵', '🎶']
-  const note = notes[Math.floor(Math.random() * notes.length)]
-  const left = 20 + Math.random() * 60
-
-  return (
-    <span className="music-note" style={{ left: `${left}%`, top: '20%' }}>
-      {note}
-    </span>
   )
 }
 

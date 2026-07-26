@@ -1,7 +1,7 @@
 import { spawn } from "child_process";
 import type { Track, GuildQueue } from "./player";
 import { queues, playNext, disconnect } from "./player";
-import { normTitle, parseArtist, extractVideoId, parseDurationStr, formatDuration, MAX_DURATION_SEC, LEAVE_TIMEOUT } from "./utils";
+import { normTitle, parseArtist, extractVideoId, parseDurationStr, formatDuration, MAX_DURATION_SEC, LEAVE_TIMEOUT, youtubeThumbnailUrl } from "./utils";
 import { ytdlpSearch } from "./search";
 
 const AUTOPLAY_QUEUE_COUNT = 3;
@@ -50,7 +50,7 @@ export async function autoplayNext(guildId: string, lastTrack: Track): Promise<v
             title,
             url,
             duration: formatDuration(sec),
-            thumbnail: "",
+            thumbnail: youtubeThumbnailUrl(url),
             requestedBy: "Autoplay",
           });
         }

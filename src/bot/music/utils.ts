@@ -52,6 +52,11 @@ export function extractVideoId(url: string): string | null {
   return null;
 }
 
+export function youtubeThumbnailUrl(url: string): string {
+  const id = extractVideoId(url);
+  return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : "";
+}
+
 export function parseDurationStr(str: string): number {
   // "3:27" or "1:03:27" → seconds
   const parts = str.split(":").map(Number);
