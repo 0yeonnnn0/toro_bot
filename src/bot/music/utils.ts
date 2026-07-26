@@ -57,6 +57,11 @@ export function youtubeThumbnailUrl(url: string): string {
   return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : "";
 }
 
+export function trackThumbnailUrl(thumbnail: string | undefined, url: string): string {
+  const value = thumbnail?.trim();
+  return value && value.toUpperCase() !== "NA" ? value : youtubeThumbnailUrl(url);
+}
+
 export function parseDurationStr(str: string): number {
   // "3:27" or "1:03:27" → seconds
   const parts = str.split(":").map(Number);

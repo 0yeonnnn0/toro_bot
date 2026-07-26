@@ -1,6 +1,6 @@
 import { spawn } from "child_process";
 import type { Track } from "./player";
-import { cleanYoutubeUrl, formatDuration, MAX_DURATION_SEC, youtubeThumbnailUrl } from "./utils";
+import { cleanYoutubeUrl, formatDuration, MAX_DURATION_SEC, trackThumbnailUrl } from "./utils";
 
 export function ytdlpGetInfo(url: string): Promise<{ title: string; url: string; duration: number; thumbnail: string } | null> {
   return new Promise((resolve) => {
@@ -20,7 +20,7 @@ export function ytdlpGetInfo(url: string): Promise<{ title: string; url: string;
         title,
         url: `https://www.youtube.com/watch?v=${id}`,
         duration: parseInt(dur) || 0,
-        thumbnail: thumb || youtubeThumbnailUrl(`https://www.youtube.com/watch?v=${id}`),
+        thumbnail: trackThumbnailUrl(thumb, `https://www.youtube.com/watch?v=${id}`),
       });
     });
     setTimeout(() => { proc.kill(); resolve(null); }, 10000);
@@ -51,7 +51,7 @@ export function ytdlpSearch(query: string, requestedBy: string, limit: number): 
           title,
           url: `https://www.youtube.com/watch?v=${id}`,
           duration: formatDuration(sec),
-          thumbnail: thumb || youtubeThumbnailUrl(`https://www.youtube.com/watch?v=${id}`),
+          thumbnail: trackThumbnailUrl(thumb, `https://www.youtube.com/watch?v=${id}`),
           requestedBy,
         });
       }

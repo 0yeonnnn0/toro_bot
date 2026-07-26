@@ -10,7 +10,7 @@ import {
 } from "@discordjs/voice";
 import type { VoiceBasedChannel } from "discord.js";
 import { addMusicLog } from "../../dashboard/music-logs";
-import { parseArtist, normTitle, parseDurationStr, LEAVE_TIMEOUT, youtubeThumbnailUrl } from "./utils";
+import { parseArtist, normTitle, parseDurationStr, LEAVE_TIMEOUT, trackThumbnailUrl } from "./utils";
 import { searchTracks } from "./search";
 import { autoplayNext } from "./autoplay";
 import { downloadAudio, createAudioStreamFromFile, cleanupFile } from "./stream";
@@ -388,7 +388,7 @@ export async function playNext(guildId: string): Promise<void> {
       artist: parseArtist(track.title),
       url: track.url,
       duration: track.duration,
-      thumbnail: track.thumbnail || youtubeThumbnailUrl(track.url),
+      thumbnail: trackThumbnailUrl(track.thumbnail, track.url),
       requestedBy: track.requestedBy,
     });
 

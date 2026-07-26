@@ -54,7 +54,8 @@ function youtubeThumbnailUrl(url: string): string {
 }
 
 function trackThumbnail(track: { thumbnail?: string; url: string }): string {
-  return track.thumbnail || youtubeThumbnailUrl(track.url)
+  const thumbnail = track.thumbnail?.trim()
+  return thumbnail && thumbnail.toUpperCase() !== 'NA' ? thumbnail : youtubeThumbnailUrl(track.url)
 }
 
 export default function Music({ editable = false }: { editable?: boolean }) {
