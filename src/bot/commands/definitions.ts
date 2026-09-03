@@ -74,13 +74,6 @@ export const commands = [
     ),
 
   new SlashCommandBuilder()
-    .setName("ask")
-    .setDescription("봇에게 질문하기")
-    .addStringOption(opt =>
-      opt.setName("message").setDescription("메시지 내용").setRequired(true)
-    ),
-
-  new SlashCommandBuilder()
     .setName("status")
     .setDescription("봇 상태 확인"),
 
