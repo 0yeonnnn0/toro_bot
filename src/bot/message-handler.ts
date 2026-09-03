@@ -1,4 +1,4 @@
-import type { AttachmentBuilder, Client, Message } from "discord.js";
+import { PermissionFlagsBits, type AttachmentBuilder, type Client, type Message } from "discord.js";
 import { getReply, lastUsedModel } from "./ai";
 import { resolveTeamContext } from "../team/context";
 import { TeamLoginRequiredError, TeamSelectionRequiredError } from "../team/errors";
@@ -171,7 +171,14 @@ export function setupMessageHandler(client: Client): void {
       const reply = await enqueue(async () => {
         let teamContext;
         try {
-          teamContext = await resolveTeamContext({ guildId: message.guildId, discordUserId: message.author.id });
+          teamContext = await resolveTeamContext({
+            guildId: message.guildId,
+            guildName: message.guild?.name,
+            guildOwnerId: message.guild?.ownerId,
+            discordUserId: message.author.id,
+            displayName: message.author.displayName,
+            canManageGuild: message.member?.permissions.has(PermissionFlagsBits.ManageGuild) ?? false,
+          });
         } catch (err) {
           if (err instanceof TeamLoginRequiredError || err instanceof TeamSelectionRequiredError) return err.message;
           throw err;

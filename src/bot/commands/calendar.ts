@@ -1,4 +1,4 @@
-import type { ChatInputCommandInteraction } from "discord.js";
+import { PermissionFlagsBits, type ChatInputCommandInteraction } from "discord.js";
 import { resolveTeamContext } from "../../team/context";
 import { TeamLoginRequiredError, TeamSelectionRequiredError } from "../../team/errors";
 import { handleCalendarConnect, handleCalendarStatus, handleCalendarList, handleCalendarCreate } from "../../tools/calendar/calendar-tool";
@@ -19,7 +19,14 @@ function formatCalendarError(err: unknown): string {
 export async function handleCalendarCommand(interaction: ChatInputCommandInteraction): Promise<void> {
   try {
     const subcommand = interaction.options.getSubcommand();
-    const { team, member } = await resolveTeamContext({ guildId: interaction.guildId, discordUserId: interaction.user.id });
+    const { team, member } = await resolveTeamContext({
+      guildId: interaction.guildId,
+      guildName: interaction.guild?.name,
+      guildOwnerId: interaction.guild?.ownerId,
+      discordUserId: interaction.user.id,
+      displayName: interaction.user.displayName,
+      canManageGuild: interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild) ?? false,
+    });
     if (subcommand === "connect") {
       await interaction.reply({ content: await handleCalendarConnect({ teamId: team.id, role: member.role, connectedByDiscordUserId: interaction.user.id }), ephemeral: true });
       return;

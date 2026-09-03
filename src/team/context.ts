@@ -1,10 +1,14 @@
 import type { Team, TeamMember } from "@prisma/client";
 import { prisma } from "../db/client";
-import { TeamLoginRequiredError, TeamSelectionRequiredError } from "./errors";
+import { TeamLoginRequiredError } from "./errors";
 
 export interface ResolveTeamContextInput {
   guildId?: string | null;
+  guildName?: string | null;
+  guildOwnerId?: string | null;
   discordUserId: string;
+  displayName?: string | null;
+  canManageGuild?: boolean;
 }
 
 export interface TeamContext {
@@ -14,50 +18,50 @@ export interface TeamContext {
 
 export async function resolveTeamContext(input: ResolveTeamContextInput): Promise<TeamContext> {
   if (input.guildId) {
-    return resolveGuildTeamContext(input.guildId, input.discordUserId);
+    return resolveGuildTeamContext({ ...input, guildId: input.guildId });
   }
 
-  return resolveDmTeamContext(input.discordUserId);
+  throw new TeamLoginRequiredError("DM에서는 팀을 선택하지 않는다냥. Discord 서버에서 TORO를 불러줘라냥.");
 }
 
-async function resolveGuildTeamContext(guildId: string, discordUserId: string): Promise<TeamContext> {
-  const team = await prisma.team.findFirst({ where: { guildId } });
+async function resolveGuildTeamContext(input: ResolveTeamContextInput & { guildId: string }): Promise<TeamContext> {
+  const { guildId, discordUserId } = input;
+  let team = await prisma.team.findFirst({ where: { guildId } });
   if (!team) {
-    throw new TeamLoginRequiredError("이 서버에는 아직 TORO 팀이 없다냥. `/team create`로 먼저 팀을 만들어줘라냥.");
+    try {
+      team = await prisma.team.create({
+        data: {
+          name: input.guildName?.trim() || "Discord 서버",
+          slug: `discord-${guildId}`,
+          guildId,
+          ownerId: input.guildOwnerId || discordUserId,
+        },
+      });
+    } catch (err) {
+      team = await prisma.team.findFirst({ where: { guildId } });
+      if (!team) throw err;
+    }
   }
 
-  const member = await prisma.teamMember.findFirst({
-    where: { teamId: team.id, discordUserId },
-    include: { team: true },
+  let member = await prisma.teamMember.findUnique({
+    where: { teamId_discordUserId: { teamId: team.id, discordUserId } },
   });
 
   if (!member) {
-    throw new TeamLoginRequiredError("이 TORO 팀에 아직 로그인되어 있지 않다냥. `/login` 또는 `/team join`을 먼저 해줘라냥.");
+    member = await prisma.teamMember.create({
+      data: {
+        teamId: team.id,
+        discordUserId,
+        displayName: input.displayName?.trim() || "Discord 사용자",
+        role: team.ownerId === discordUserId ? "OWNER" : input.canManageGuild ? "ADMIN" : "MEMBER",
+      },
+    });
+  } else if (input.displayName && member.displayName !== input.displayName) {
+    member = await prisma.teamMember.update({
+      where: { id: member.id },
+      data: { displayName: input.displayName },
+    });
   }
 
   return { team, member };
-}
-
-async function resolveDmTeamContext(discordUserId: string): Promise<TeamContext> {
-  const memberships = await prisma.teamMember.findMany({
-    where: { discordUserId },
-    include: { team: true },
-  });
-
-  if (memberships.length === 0) {
-    throw new TeamLoginRequiredError("아직 가입한 TORO 팀이 없다냥. 서버에서 `/team create` 또는 `/team join`을 먼저 해줘라냥.");
-  }
-
-  if (memberships.length > 1) {
-    const active = await prisma.activeTeamSelection.findUnique({ where: { discordUserId } });
-    if (active) {
-      const member = memberships.find((m) => m.teamId === active.teamId);
-      if (member) return { team: member.team, member };
-    }
-    const choices = memberships.map((m) => `- ${m.team.name} (\`${m.team.slug}\`)`).join("\n");
-    throw new TeamSelectionRequiredError(`가입한 TORO 팀이 여러 개다냥. \`/team switch team:<slug>\`로 사용할 팀을 선택해줘라냥.\n${choices}`);
-  }
-
-  const member = memberships[0];
-  return { team: member.team, member };
 }
