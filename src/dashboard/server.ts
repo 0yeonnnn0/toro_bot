@@ -57,8 +57,8 @@ export function createServer(): express.Application {
   app.use("/api", (req, res, next) => {
     const secret = getSecret();
     if (!secret || secret === "changeme") return next();
-    // Public chat endpoints - no auth required
-    if (req.path.startsWith("/chat/characters") || req.path.startsWith("/chat/send") || req.path.startsWith("/music-logs") || req.path.startsWith("/calendar/oauth/callback")) {
+    // Public chat and shared music queue endpoints - no auth required
+    if (req.path.startsWith("/chat/characters") || req.path.startsWith("/chat/send") || req.path.startsWith("/music-logs") || req.path.startsWith("/music/queues") || req.path.startsWith("/calendar/oauth/callback")) {
       return next();
     }
     const cookieHeader = req.headers.cookie || "";

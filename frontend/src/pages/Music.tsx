@@ -206,7 +206,7 @@ export default function Music({ editable = false }: { editable?: boolean }) {
           <div className="panel-header">
             <div>
               <div className="panel-title">Current Playlist</div>
-              <p className="hint">디스코드 음악 큐를 기존 어드민 패널 안에서 조작합니다.</p>
+              <p className="hint">현재 재생 중인 곡과 대기열을 이 화면에서 관리합니다.</p>
             </div>
             <span className="panel-badge">{queueDetail?.autoplay.enabled ? `AUTO ${queueDetail.autoplay.genre || 'ARTIST'}` : 'AUTO OFF'}</span>
           </div>
