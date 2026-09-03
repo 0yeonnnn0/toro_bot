@@ -1,35 +1,5 @@
 import { ChatInputCommandInteraction, TextChannel, ChannelType } from "discord.js";
 import { getReply } from "../ai";
-import { resolveTeamContext } from "../../team/context";
-import { TeamLoginRequiredError, TeamSelectionRequiredError } from "../../team/errors";
-import { appendConversationMessage, getRecentConversationHistory } from "../../ai/conversation-store";
-import { routeToroMessage } from "../../ai/router";
-
-// ── /ask ──
-export async function handleQuestion(interaction: ChatInputCommandInteraction): Promise<void> {
-  const message = interaction.options.getString("message", true);
-  await interaction.deferReply();
-
-  try {
-    const teamContext = await resolveTeamContext({ guildId: interaction.guildId, discordUserId: interaction.user.id });
-    await appendConversationMessage({ teamId: teamContext.team.id, guildId: interaction.guildId, channelId: interaction.channelId, role: "user", content: `${interaction.user.displayName}: ${message}`, discordUserId: interaction.user.id, displayName: interaction.user.displayName, discordMessageId: interaction.id });
-    const history = await getRecentConversationHistory({ teamId: teamContext.team.id, guildId: interaction.guildId, channelId: interaction.channelId });
-    const reply = await routeToroMessage({ teamContext, content: message, mentions: [], history, source: { guildId: interaction.guildId, channelId: interaction.channelId, messageId: interaction.id }, chat: (conversationHistory) => getReply(conversationHistory, "", interaction.user.id) });
-    await appendConversationMessage({ teamId: teamContext.team.id, guildId: interaction.guildId, channelId: interaction.channelId, role: "assistant", content: reply });
-    await interaction.editReply(reply);
-  } catch (err) {
-    if (err instanceof TeamLoginRequiredError || err instanceof TeamSelectionRequiredError) {
-      await interaction.editReply(err.message);
-      return;
-    }
-    const isRateLimit = (err as Error).message?.includes("429") || (err as Error).message?.includes("quota");
-    await interaction.editReply(
-      isRateLimit
-        ? "오늘은 너무 많이 떠들었다냥... 내일 다시 돌아온다냥! >w<"
-        : "뭔가 고장났다냥... @д@ [CH]"
-    );
-  }
-}
 
 // ── /summary ──
 export async function handleSummary(interaction: ChatInputCommandInteraction): Promise<void> {

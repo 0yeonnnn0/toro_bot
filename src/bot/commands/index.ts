@@ -4,7 +4,7 @@ import {
   Routes,
 } from "discord.js";
 import { commands } from "./definitions";
-import { handleQuestion, handleSummary } from "./chat";
+import { handleSummary } from "./chat";
 import { handleHelp, handleStatus } from "./settings";
 import { handleLogin, handleTeamCommand } from "./team";
 import { handleCalendarCommand } from "./calendar";
@@ -50,9 +50,6 @@ export async function handleInteraction(interaction: ChatInputCommandInteraction
       break;
     case "help":
       await handleHelp(interaction);
-      break;
-    case "ask":
-      await handleQuestion(interaction);
       break;
     case "status":
       await handleStatus(interaction);

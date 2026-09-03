@@ -50,7 +50,7 @@ gh pr create --base develop        # develop으로 PR
 - `src/index.ts` — entrypoint; boots RAG, vault, bot, and dashboard server
 - `src/bot/client.ts` — Discord message handler, auto-participation logic (auto/interval/mute modes), mention handling, conversation buffer for RAG, image extraction
 - `src/bot/ai.ts` — multi-provider AI calls (Anthropic/OpenAI/Google) with automatic fallback to `gemma-3-27b-it` on rate limits; exports `getReply()`, `judgeAndReply()`, `callAI()`
-- `src/bot/commands.ts` — slash command definitions and handlers (`/ask`, `/mode`, `/draw`, `/say`, `/summary`, `/reply`, `/mute`, `/내정보`, `/status`)
+- `src/bot/commands/` — slash command definitions and handlers (`/draw`, `/say`, `/summary`, `/mute`, `/내정보`, `/status`, 팀, 캘린더, 음악)
 - `src/bot/prompt.ts` — preset system; loads/saves presets from `data/presets.json`; builds system prompt with owner/user suffix based on `OWNER_ID`
 - `src/bot/history.ts` — per-channel message history (max 30), in-memory only
 - `src/bot/rag.ts` — vector search via vectra + Google `gemini-embedding-001`; stores conversation chunks, searches relevant context

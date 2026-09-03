@@ -15,7 +15,6 @@ export async function handleHelp(interaction: ChatInputCommandInteraction): Prom
         name: "💬 대화",
         value: [
           "`@TORO` — 멘션하면 답변",
-          "`/ask` — 1:1 질문",
           "`/summary` — 최근 대화 요약",
         ].join("\n"),
       },
