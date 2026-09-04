@@ -75,6 +75,19 @@ describe("resolveTeamContext", () => {
     expect(result.member.discordUserId).toBe("user_1");
   });
 
+  it("promotes a live Discord server manager to team admin", async () => {
+    const team = { id: "team_1", name: "Guild Team", slug: "guild-team", guildId: "guild_1", ownerId: "owner_1" };
+    const member = { id: "member_1", teamId: "team_1", discordUserId: "user_1", displayName: "User", role: "MEMBER" };
+    vi.mocked(prisma.team.findFirst).mockResolvedValue(team as never);
+    vi.mocked(prisma.teamMember.findUnique).mockResolvedValue(member as never);
+    vi.mocked(prisma.teamMember.update).mockResolvedValue({ ...member, role: "ADMIN" } as never);
+
+    const result = await resolveTeamContext({ guildId: "guild_1", discordUserId: "user_1", displayName: "User", canManageGuild: true });
+
+    expect(prisma.teamMember.update).toHaveBeenCalledWith({ where: { id: "member_1" }, data: { role: "ADMIN" } });
+    expect(result.member.role).toBe("ADMIN");
+  });
+
   it("directs DM users to a Discord server instead of selecting a team", async () => {
     await expect(resolveTeamContext({ guildId: null, discordUserId: "user_1" }))
       .rejects.toThrow("Discord 서버에서 TORO를 불러줘");

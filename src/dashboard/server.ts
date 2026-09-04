@@ -2,6 +2,8 @@ import path from "path";
 import crypto from "crypto";
 import express from "express";
 import apiRoutes from "./routes/api";
+import webAuthRouter from "./routes/web-auth";
+import webTeamsRouter from "./routes/web-teams";
 import { state } from "../shared/state";
 
 const FRONTEND_DIR = path.join(__dirname, "../../frontend/dist");
@@ -35,6 +37,10 @@ export function createServer(): express.Application {
   app.get("/healthz", (_req, res) => {
     res.json({ ok: true });
   });
+
+  // Discord 사용자용 로그인/팀 API는 각 라우트에서 별도 세션과 권한을 검증한다.
+  app.use("/api", webAuthRouter);
+  app.use("/api", webTeamsRouter);
 
   app.post("/api/login", (req, res) => {
     const secret = getSecret();
