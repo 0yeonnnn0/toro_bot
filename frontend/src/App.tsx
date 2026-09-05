@@ -43,7 +43,7 @@ function App() {
       <Routes>
         {/* Public pages */}
         <Route path="/chat" element={<Chat />} />
-        <Route path="/music" element={<Music />} />
+        <Route path="/music" element={<main><Music editable /></main>} />
 
         {/* Admin login */}
         <Route path="/admin/login" element={<Login />} />

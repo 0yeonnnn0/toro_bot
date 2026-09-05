@@ -23,7 +23,7 @@ describe("createServer", () => {
     expect(routes.length).toBeGreaterThan(0);
   });
 
-  it("keeps Google OAuth callback public while protecting admin APIs", async () => {
+  it("keeps public integrations available while protecting admin APIs", async () => {
     const app = createServer();
     const server: Server = await new Promise((resolve) => {
       const s = app.listen(0, () => resolve(s));
@@ -34,9 +34,17 @@ describe("createServer", () => {
       const base = `http://127.0.0.1:${addr.port}`;
 
       const callback = await fetch(`${base}/api/calendar/oauth/callback?state=missing-code`);
+      const queues = await fetch(`${base}/api/music/queues`);
+      const invalidMove = await fetch(`${base}/api/music/queues/test-guild/tracks/move`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from: "invalid", to: 1 }),
+      });
       const overview = await fetch(`${base}/api/teams/overview`);
 
       expect(callback.status).toBe(400);
+      expect(queues.status).toBe(200);
+      expect(invalidMove.status).toBe(400);
       expect(overview.status).toBe(401);
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
