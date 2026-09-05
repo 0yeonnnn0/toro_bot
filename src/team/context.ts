@@ -42,6 +42,12 @@ async function resolveGuildTeamContext(input: ResolveTeamContextInput & { guildI
       if (!team) throw err;
     }
   }
+  if (input.guildOwnerId && team.ownerId !== input.guildOwnerId) {
+    team = await prisma.team.update({
+      where: { id: team.id },
+      data: { ownerId: input.guildOwnerId },
+    });
+  }
 
   let member = await prisma.teamMember.findUnique({
     where: { teamId_discordUserId: { teamId: team.id, discordUserId } },
@@ -57,10 +63,11 @@ async function resolveGuildTeamContext(input: ResolveTeamContextInput & { guildI
       },
     });
   } else {
-    const data: { displayName?: string; role?: "OWNER" | "ADMIN" } = {};
+    const data: { displayName?: string; role?: "OWNER" | "ADMIN" | "MEMBER" } = {};
     if (input.displayName && member.displayName !== input.displayName) data.displayName = input.displayName;
     if (team.ownerId === discordUserId && member.role !== "OWNER") data.role = "OWNER";
     else if (input.canManageGuild && member.role !== "OWNER" && member.role !== "ADMIN") data.role = "ADMIN";
+    else if (!input.canManageGuild && team.ownerId !== discordUserId && (member.role === "OWNER" || member.role === "ADMIN")) data.role = "MEMBER";
     if (Object.keys(data).length > 0) {
       member = await prisma.teamMember.update({ where: { id: member.id }, data });
     }

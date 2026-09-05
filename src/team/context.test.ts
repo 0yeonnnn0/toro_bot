@@ -13,6 +13,7 @@ vi.mock("../db/client", () => ({
       findFirst: vi.fn(),
       findUnique: vi.fn(),
       create: vi.fn(),
+      update: vi.fn(),
     },
     activeTeamSelection: {
       findUnique: vi.fn(),
@@ -86,6 +87,22 @@ describe("resolveTeamContext", () => {
 
     expect(prisma.teamMember.update).toHaveBeenCalledWith({ where: { id: "member_1" }, data: { role: "ADMIN" } });
     expect(result.member.role).toBe("ADMIN");
+  });
+
+  it("makes the current Discord owner authoritative and removes stale team admin access", async () => {
+    const team = { id: "team_1", name: "Guild Team", slug: "guild-team", guildId: "guild_1", ownerId: "user_1" };
+    const syncedTeam = { ...team, ownerId: "owner_2" };
+    const member = { id: "member_1", teamId: "team_1", discordUserId: "user_1", displayName: "User", role: "OWNER" };
+    vi.mocked(prisma.team.findFirst).mockResolvedValue(team as never);
+    vi.mocked(prisma.team.update).mockResolvedValue(syncedTeam as never);
+    vi.mocked(prisma.teamMember.findUnique).mockResolvedValue(member as never);
+    vi.mocked(prisma.teamMember.update).mockResolvedValue({ ...member, role: "MEMBER" } as never);
+
+    const result = await resolveTeamContext({ guildId: "guild_1", guildOwnerId: "owner_2", discordUserId: "user_1", displayName: "User", canManageGuild: false });
+
+    expect(prisma.team.update).toHaveBeenCalledWith({ where: { id: "team_1" }, data: { ownerId: "owner_2" } });
+    expect(prisma.teamMember.update).toHaveBeenCalledWith({ where: { id: "member_1" }, data: { role: "MEMBER" } });
+    expect(result.member.role).toBe("MEMBER");
   });
 
   it("directs DM users to a Discord server instead of selecting a team", async () => {
