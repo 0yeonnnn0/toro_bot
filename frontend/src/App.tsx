@@ -10,6 +10,8 @@ import Chat from './pages/Chat'
 import Music from './pages/Music'
 import Stored from './pages/Stored'
 import Rag from './pages/Rag'
+import DiscordLogin from './pages/DiscordLogin'
+import Teams from './pages/Teams'
 
 function AdminLayout({ children }: { children: React.ReactNode }) {
   const [authed, setAuthed] = useState<boolean | null>(null)
@@ -44,6 +46,8 @@ function App() {
         {/* Public pages */}
         <Route path="/chat" element={<Chat />} />
         <Route path="/music" element={<Music />} />
+        <Route path="/login" element={<DiscordLogin />} />
+        <Route path="/teams" element={<Teams />} />
 
         {/* Admin login */}
         <Route path="/admin/login" element={<Login />} />
