@@ -78,7 +78,7 @@ describe("web team routes", () => {
   });
 
   it("lists manageable servers with bot and team state", async () => {
-    mocks.getGuild.mockImplementation((id: string) => id === "guild_1" ? { id, name: "토로 연구소" } : undefined);
+    mocks.getGuild.mockImplementation((id: string) => id === "guild_1" ? { id, name: "토로 연구소", ownerId: "user_1" } : undefined);
     mocks.findManyTeams.mockResolvedValue([{ id: "team_1", guildId: "guild_1", name: "토로 연구소", slug: "discord-guild_1", _count: { members: 3 }, calendar: { id: "calendar_1" } }]);
     const base = await startApp();
 
@@ -89,6 +89,22 @@ describe("web team routes", () => {
       { id: "guild_1", name: "토로 연구소", icon: null, botInstalled: true, team: { id: "team_1", name: "토로 연구소", slug: "discord-guild_1", memberCount: 3, calendarConnected: true } },
       { id: "guild_2", name: "미설치 서버", icon: null, botInstalled: false, team: null },
     ] });
+  });
+
+  it("removes installed servers from the list when live Discord management permission was revoked", async () => {
+    const permissions = { has: vi.fn(() => false) };
+    mocks.getGuild.mockImplementation((id: string) => id === "guild_1"
+      ? { id, name: "토로 연구소", ownerId: "owner_1", members: { fetch: vi.fn(async () => ({ permissions })) } }
+      : undefined);
+    const base = await startApp();
+
+    const response = await fetch(`${base}/api/account/guilds`, { headers: { cookie: sessionCookie() } });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ guilds: [
+      { id: "guild_2", name: "미설치 서버", icon: null, botInstalled: false, team: null },
+    ] });
+    expect(mocks.findManyTeams).not.toHaveBeenCalled();
   });
 
   it("checks live Discord permissions before provisioning a team", async () => {

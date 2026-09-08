@@ -106,7 +106,22 @@ describe("resolveTeamContext", () => {
   });
 
   it("directs DM users to a Discord server instead of selecting a team", async () => {
+    vi.mocked(prisma.teamMember.findMany).mockResolvedValue([]);
     await expect(resolveTeamContext({ guildId: null, discordUserId: "user_1" }))
       .rejects.toThrow("Discord 서버에서 TORO를 불러줘");
+  });
+
+  it("keeps one existing guild-less team accessible in DM without allowing new DM teams", async () => {
+    const team = { id: "legacy_1", name: "기존 DM 팀", slug: "legacy", guildId: null, ownerId: "user_1" };
+    const member = { id: "member_1", teamId: team.id, discordUserId: "user_1", displayName: "User", role: "OWNER", team };
+    vi.mocked(prisma.teamMember.findMany).mockResolvedValue([member] as never);
+
+    const result = await resolveTeamContext({ guildId: null, discordUserId: "user_1" });
+
+    expect(result).toEqual({ team, member });
+    expect(prisma.teamMember.findMany).toHaveBeenCalledWith({
+      where: { discordUserId: "user_1", team: { guildId: null } },
+      include: { team: true },
+    });
   });
 });

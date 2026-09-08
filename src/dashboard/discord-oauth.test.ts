@@ -2,7 +2,12 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   buildDiscordAuthorizeUrl,
   canManageDiscordGuild,
+  consumeDiscordOAuthState,
+  createDiscordOAuthState,
+  createDiscordWebSession,
+  getDiscordWebSession,
   getDiscordOAuthConfig,
+  pruneDiscordOAuthStores,
 } from "./discord-oauth";
 
 const ORIGINAL_ENV = { ...process.env };
@@ -42,5 +47,15 @@ describe("Discord web OAuth", () => {
       clientSecret: "secret",
       redirectUri: "https://bot.example.com/api/auth/discord/callback",
     });
+  });
+
+  it("prunes abandoned OAuth states and expired web sessions", () => {
+    pruneDiscordOAuthStores(Number.MAX_SAFE_INTEGER);
+    const state = createDiscordOAuthState(1_000);
+    const sessionId = createDiscordWebSession({ id: "user_1", username: "tester" }, [], 1_000);
+
+    expect(pruneDiscordOAuthStores(8 * 24 * 60 * 60 * 1000)).toEqual({ statesRemoved: 1, sessionsRemoved: 1 });
+    expect(consumeDiscordOAuthState(state)).toBe(false);
+    expect(getDiscordWebSession(sessionId)).toBeNull();
   });
 });

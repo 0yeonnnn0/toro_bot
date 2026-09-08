@@ -16,6 +16,19 @@ function iconUrl(guild: DiscordGuildSummary): string | null {
   return guild.icon ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=128` : null;
 }
 
+async function hasLiveManagementPermission(
+  guild: NonNullable<ReturnType<typeof client.guilds.cache.get>>,
+  userId: string,
+): Promise<boolean> {
+  if (guild.ownerId === userId) return true;
+  try {
+    const member = await guild.members.fetch(userId);
+    return member.permissions.has(PermissionFlagsBits.ManageGuild);
+  } catch {
+    return false;
+  }
+}
+
 async function requireManagedBotGuild(req: Request, guildId: string) {
   const session = sessionFor(req);
   if (!session) return { error: 401 as const, message: "Discord 로그인이 필요하다냥." };
@@ -25,12 +38,8 @@ async function requireManagedBotGuild(req: Request, guildId: string) {
   const guild = client.guilds.cache.get(guildId);
   if (!guild) return { error: 409 as const, message: "이 서버에 TORO를 먼저 추가해줘라냥." };
 
-  try {
-    const member = await guild.members.fetch(session.user.id);
-    const canManage = guild.ownerId === session.user.id || member.permissions.has(PermissionFlagsBits.ManageGuild);
-    if (!canManage) return { error: 403 as const, message: "Discord 서버 관리 권한이 필요하다냥." };
-  } catch {
-    return { error: 403 as const, message: "Discord 서버 멤버십을 확인하지 못했다냥." };
+  if (!await hasLiveManagementPermission(guild, session.user.id)) {
+    return { error: 403 as const, message: "Discord 서버 관리 권한이 필요하다냥." };
   }
 
   return { session, oauthGuild, guild };
@@ -48,7 +57,12 @@ router.get("/account/guilds", async (req, res) => {
   const session = sessionFor(req);
   if (!session) return res.status(401).json({ error: "Discord 로그인이 필요하다냥." });
 
-  const guildIds = session.guilds.map(guild => guild.id);
+  const verifiedGuilds = (await Promise.all(session.guilds.map(async oauthGuild => {
+    const guild = client.guilds.cache.get(oauthGuild.id);
+    if (!guild) return { oauthGuild, guild: null };
+    return await hasLiveManagementPermission(guild, session.user.id) ? { oauthGuild, guild } : null;
+  }))).filter(item => item !== null);
+  const guildIds = verifiedGuilds.flatMap(item => item.guild ? [item.oauthGuild.id] : []);
   const teams = guildIds.length === 0 ? [] : await prisma.team.findMany({
     where: { guildId: { in: guildIds } },
     select: {
@@ -63,13 +77,13 @@ router.get("/account/guilds", async (req, res) => {
   const teamByGuildId = new Map(teams.map(team => [team.guildId, team]));
 
   return res.json({
-    guilds: session.guilds.map(guild => {
-      const team = teamByGuildId.get(guild.id);
+    guilds: verifiedGuilds.map(({ oauthGuild: guild, guild: liveGuild }) => {
+      const team = liveGuild ? teamByGuildId.get(guild.id) : undefined;
       return {
         id: guild.id,
         name: guild.name,
         icon: iconUrl(guild),
-        botInstalled: client.guilds.cache.get(guild.id) !== undefined,
+        botInstalled: Boolean(liveGuild),
         team: team ? {
           id: team.id,
           name: team.name,

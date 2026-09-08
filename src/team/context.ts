@@ -1,6 +1,6 @@
 import type { Team, TeamMember } from "@prisma/client";
 import { prisma } from "../db/client";
-import { TeamLoginRequiredError } from "./errors";
+import { TeamLoginRequiredError, TeamSelectionRequiredError } from "./errors";
 
 export interface ResolveTeamContextInput {
   guildId?: string | null;
@@ -21,7 +21,24 @@ export async function resolveTeamContext(input: ResolveTeamContextInput): Promis
     return resolveGuildTeamContext({ ...input, guildId: input.guildId });
   }
 
-  throw new TeamLoginRequiredError("DM에서는 팀을 선택하지 않는다냥. Discord 서버에서 TORO를 불러줘라냥.");
+  return resolveLegacyDmTeamContext(input.discordUserId);
+}
+
+async function resolveLegacyDmTeamContext(discordUserId: string): Promise<TeamContext> {
+  const memberships = await prisma.teamMember.findMany({
+    where: { discordUserId, team: { guildId: null } },
+    include: { team: true },
+  });
+  if (memberships.length === 0) {
+    throw new TeamLoginRequiredError("DM에서는 새 팀을 만들지 않는다냥. Discord 서버에서 TORO를 불러줘라냥.");
+  }
+  if (memberships.length === 1) return { team: memberships[0].team, member: memberships[0] };
+
+  const active = await prisma.activeTeamSelection.findUnique({ where: { discordUserId } });
+  const selected = active && memberships.find(member => member.teamId === active.teamId);
+  if (selected) return { team: selected.team, member: selected };
+
+  throw new TeamSelectionRequiredError("기존 DM 팀이 여러 개라 자동으로 고를 수 없다냥. 데이터는 보존되어 있으니 관리자에게 Discord 서버 연결을 요청해줘라냥.");
 }
 
 async function resolveGuildTeamContext(input: ResolveTeamContextInput & { guildId: string }): Promise<TeamContext> {

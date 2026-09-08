@@ -47,6 +47,10 @@ export default function Teams() {
     setWorkingGuildId(guild.id)
     try {
       const response = await fetch(`/api/account/guilds/${guild.id}/team`, { method: create ? 'POST' : 'GET' })
+      if (response.status === 401) {
+        navigate('/login', { replace: true })
+        return
+      }
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || '팀 정보를 불러오지 못했어.')
       setDetails(current => ({ ...current, [guild.id]: data.team }))
@@ -84,8 +88,13 @@ export default function Teams() {
   }
 
   const logout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    navigate('/login', { replace: true })
+    try {
+      const response = await fetch('/api/auth/logout', { method: 'POST' })
+      if (!response.ok) throw new Error('로그아웃하지 못했어.')
+      navigate('/login', { replace: true })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '로그아웃하지 못했어.')
+    }
   }
 
   return (
@@ -116,7 +125,7 @@ export default function Teams() {
           </div>
 
           {loading ? (
-            <div className="account-server-list" aria-label="팀 목록 불러오는 중">
+            <div className="account-server-list" role="status" aria-live="polite" aria-label="팀 목록 불러오는 중">
               {[0, 1].map(item => <div className="panel account-server-skeleton" key={item} />)}
             </div>
           ) : guilds.length === 0 ? (
@@ -150,6 +159,7 @@ export default function Teams() {
                         disabled={!guild.botInstalled || workingGuildId === guild.id}
                         onClick={() => toggleTeam(guild)}
                         aria-expanded={expanded}
+                        aria-controls={`team-detail-${guild.id}`}
                       >
                         {workingGuildId === guild.id ? '확인 중…' : !guild.botInstalled ? '먼저 봇을 추가해줘' : guild.team ? '팀 관리' : '팀 연결'}
                         {guild.botInstalled && guild.team && (expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />)}
@@ -157,7 +167,7 @@ export default function Teams() {
                     </div>
 
                     {expanded && detail && (
-                      <div className="account-team-detail">
+                      <div className="account-team-detail" id={`team-detail-${guild.id}`}>
                         <div className="account-detail-grid">
                           <div><Users size={17} /><span>확인된 멤버</span><strong>{detail.members.length}명</strong></div>
                           <div><ShieldCheck size={17} /><span>내 권한</span><strong>{roleLabel[detail.role]}</strong></div>

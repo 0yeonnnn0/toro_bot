@@ -5,6 +5,8 @@ const MANAGE_GUILD = 1n << 5n;
 const ADMINISTRATOR = 1n << 3n;
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const STATE_TTL_MS = 10 * 60 * 1000;
+const MAX_OAUTH_STATES = 2_048;
+const MAX_WEB_SESSIONS = 10_000;
 
 export interface DiscordOAuthConfig {
   clientId: string;
@@ -35,6 +37,32 @@ export interface DiscordWebSession {
 
 const oauthStates = new Map<string, number>();
 const sessions = new Map<string, DiscordWebSession>();
+
+export function pruneDiscordOAuthStores(now = Date.now()): { statesRemoved: number; sessionsRemoved: number } {
+  let statesRemoved = 0;
+  let sessionsRemoved = 0;
+  for (const [state, expiresAt] of oauthStates) {
+    if (expiresAt < now) {
+      oauthStates.delete(state);
+      statesRemoved += 1;
+    }
+  }
+  for (const [sessionId, session] of sessions) {
+    if (session.expiresAt < now) {
+      sessions.delete(sessionId);
+      sessionsRemoved += 1;
+    }
+  }
+  return { statesRemoved, sessionsRemoved };
+}
+
+function evictOldest<K, V>(store: Map<K, V>, limit: number): void {
+  while (store.size >= limit) {
+    const oldest = store.keys().next().value as K | undefined;
+    if (oldest === undefined) break;
+    store.delete(oldest);
+  }
+}
 
 function publicBaseUrl(): string {
   return (process.env.TORO_PUBLIC_URL || process.env.PUBLIC_BASE_URL || process.env.DASHBOARD_PUBLIC_URL || "")
@@ -72,6 +100,8 @@ export function canManageDiscordGuild(guild: Pick<DiscordGuildSummary, "owner" |
 }
 
 export function createDiscordOAuthState(now = Date.now()): string {
+  pruneDiscordOAuthStores(now);
+  evictOldest(oauthStates, MAX_OAUTH_STATES);
   const state = crypto.randomBytes(24).toString("base64url");
   oauthStates.set(state, now + STATE_TTL_MS);
   return state;
@@ -118,6 +148,8 @@ export async function fetchDiscordGuilds(accessToken: string): Promise<DiscordGu
 }
 
 export function createDiscordWebSession(user: DiscordIdentity, guilds: DiscordGuildSummary[], now = Date.now()): string {
+  pruneDiscordOAuthStores(now);
+  evictOldest(sessions, MAX_WEB_SESSIONS);
   const sessionId = crypto.randomUUID();
   sessions.set(sessionId, { user, guilds, expiresAt: now + SESSION_TTL_MS });
   return sessionId;
