@@ -1512,6 +1512,17 @@ input[type="range"] {
   background: var(--bg-raised); color: var(--text-secondary); font-size: 0.75rem; font-weight: 700;
 }
 .account-member strong { font-size: 0.84rem; font-weight: 600; }
+.account-legacy { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); }
+.account-legacy-copy { display: flex; align-items: center; gap: var(--space-3); }
+.account-legacy-copy > svg { color: var(--accent); }
+.account-legacy-copy div { display: flex; flex-direction: column; gap: 3px; }
+.account-legacy-copy strong { font-size: 0.9rem; }
+.account-legacy-copy span { color: var(--text-tertiary); font-size: 0.72rem; }
+.account-legacy-action { display: flex; align-items: center; gap: var(--space-2); }
+.account-legacy-action select {
+  min-height: 44px; min-width: 180px; padding: 0 var(--space-3); border: 1px solid var(--border);
+  border-radius: var(--radius-md); background: var(--bg-raised); color: var(--text-primary); font: inherit;
+}
 .account-empty { min-height: 210px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: var(--text-tertiary); }
 .account-empty svg { color: var(--accent); margin-bottom: var(--space-3); }
 .account-empty strong { color: var(--text-primary); margin-bottom: var(--space-1); }
@@ -1531,5 +1542,8 @@ input[type="range"] {
   .account-server { padding: var(--space-5); }
   .account-server-row { align-items: stretch; flex-direction: column; }
   .account-server-row .btn { width: 100%; min-height: 44px; }
+  .account-legacy { align-items: stretch; flex-direction: column; }
+  .account-legacy-action { align-items: stretch; flex-direction: column; }
+  .account-legacy-action select, .account-legacy-action .btn { width: 100%; }
   .account-detail-grid { grid-template-columns: 1fr; }
 }

@@ -105,6 +105,19 @@ describe("resolveTeamContext", () => {
     expect(result.member.role).toBe("MEMBER");
   });
 
+  it("demotes a former server owner who still has Manage Server permission to admin", async () => {
+    const team = { id: "team_1", name: "Guild Team", slug: "guild-team", guildId: "guild_1", ownerId: "owner_2" };
+    const member = { id: "member_1", teamId: "team_1", discordUserId: "user_1", displayName: "User", role: "OWNER" };
+    vi.mocked(prisma.team.findFirst).mockResolvedValue(team as never);
+    vi.mocked(prisma.teamMember.findUnique).mockResolvedValue(member as never);
+    vi.mocked(prisma.teamMember.update).mockResolvedValue({ ...member, role: "ADMIN" } as never);
+
+    const result = await resolveTeamContext({ guildId: "guild_1", guildOwnerId: "owner_2", discordUserId: "user_1", canManageGuild: true });
+
+    expect(prisma.teamMember.update).toHaveBeenCalledWith({ where: { id: "member_1" }, data: { role: "ADMIN" } });
+    expect(result.member.role).toBe("ADMIN");
+  });
+
   it("directs DM users to a Discord server instead of selecting a team", async () => {
     vi.mocked(prisma.teamMember.findMany).mockResolvedValue([]);
     await expect(resolveTeamContext({ guildId: null, discordUserId: "user_1" }))

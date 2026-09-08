@@ -88,7 +88,7 @@ describe("web team routes", () => {
     await expect(response.json()).resolves.toEqual({ guilds: [
       { id: "guild_1", name: "토로 연구소", icon: null, botInstalled: true, team: { id: "team_1", name: "토로 연구소", slug: "discord-guild_1", memberCount: 3, calendarConnected: true } },
       { id: "guild_2", name: "미설치 서버", icon: null, botInstalled: false, team: null },
-    ] });
+    ], legacyTeams: [] });
   });
 
   it("removes installed servers from the list when live Discord management permission was revoked", async () => {
@@ -103,8 +103,7 @@ describe("web team routes", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ guilds: [
       { id: "guild_2", name: "미설치 서버", icon: null, botInstalled: false, team: null },
-    ] });
-    expect(mocks.findManyTeams).not.toHaveBeenCalled();
+    ], legacyTeams: [] });
   });
 
   it("checks live Discord permissions before provisioning a team", async () => {
@@ -142,5 +141,30 @@ describe("web team routes", () => {
     });
 
     expect(response.status).toBe(409);
+  });
+
+  it("lets a legacy team owner attach preserved data to a managed Discord server", async () => {
+    const permissions = { has: vi.fn(() => true) };
+    const guild = { id: "guild_1", name: "토로 연구소", ownerId: "owner_1", members: { fetch: vi.fn(async () => ({ permissions })) } };
+    mocks.getGuild.mockReturnValue(guild);
+    mocks.findFirstTeam.mockResolvedValueOnce({ id: "legacy_1", name: "기존 팀", slug: "legacy", guildId: null, ownerId: "user_1" }).mockResolvedValueOnce(null);
+    mocks.updateTeam.mockResolvedValue({ id: "legacy_1", name: guild.name, slug: "legacy", guildId: guild.id, ownerId: guild.ownerId });
+    mocks.resolveTeamContext.mockResolvedValue({
+      team: { id: "legacy_1", guildId: guild.id, name: guild.name, slug: "legacy" },
+      member: { role: "ADMIN" },
+    });
+    const base = await startApp();
+
+    const response = await fetch(`${base}/api/account/guilds/guild_1/team`, {
+      method: "POST",
+      headers: { cookie: sessionCookie(), "content-type": "application/json" },
+      body: JSON.stringify({ legacyTeamId: "legacy_1" }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.updateTeam).toHaveBeenCalledWith({
+      where: { id: "legacy_1" },
+      data: { guildId: "guild_1", name: "토로 연구소", ownerId: "owner_1" },
+    });
   });
 });

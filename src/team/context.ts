@@ -83,7 +83,7 @@ async function resolveGuildTeamContext(input: ResolveTeamContextInput & { guildI
     const data: { displayName?: string; role?: "OWNER" | "ADMIN" | "MEMBER" } = {};
     if (input.displayName && member.displayName !== input.displayName) data.displayName = input.displayName;
     if (team.ownerId === discordUserId && member.role !== "OWNER") data.role = "OWNER";
-    else if (input.canManageGuild && member.role !== "OWNER" && member.role !== "ADMIN") data.role = "ADMIN";
+    else if (input.canManageGuild && member.role !== "ADMIN") data.role = "ADMIN";
     else if (!input.canManageGuild && team.ownerId !== discordUserId && (member.role === "OWNER" || member.role === "ADMIN")) data.role = "MEMBER";
     if (Object.keys(data).length > 0) {
       member = await prisma.teamMember.update({ where: { id: member.id }, data });

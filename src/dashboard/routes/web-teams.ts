@@ -75,6 +75,11 @@ router.get("/account/guilds", async (req, res) => {
     },
   });
   const teamByGuildId = new Map(teams.map(team => [team.guildId, team]));
+  const legacyMemberships = await prisma.teamMember.findMany({
+    where: { discordUserId: session.user.id, role: "OWNER", team: { guildId: null } },
+    select: { team: { select: { id: true, name: true, slug: true, _count: { select: { members: true } } } } },
+    orderBy: { createdAt: "asc" },
+  });
 
   return res.json({
     guilds: verifiedGuilds.map(({ oauthGuild: guild, guild: liveGuild }) => {
@@ -93,12 +98,38 @@ router.get("/account/guilds", async (req, res) => {
         } : null,
       };
     }),
+    legacyTeams: legacyMemberships.map(({ team }) => ({
+      id: team.id,
+      name: team.name,
+      slug: team.slug,
+      memberCount: team._count.members,
+    })),
   });
 });
 
 router.post("/account/guilds/:guildId/team", async (req, res) => {
   const access = await requireManagedBotGuild(req, String(req.params.guildId));
   if ("error" in access && access.error) return res.status(access.error).json({ error: access.message });
+
+  const legacyTeamId = typeof req.body?.legacyTeamId === "string" ? req.body.legacyTeamId.trim() : "";
+  if (legacyTeamId) {
+    const legacyTeam = await prisma.team.findFirst({
+      where: { id: legacyTeamId, guildId: null, ownerId: access.session.user.id },
+    });
+    if (!legacyTeam) return res.status(404).json({ error: "이전할 수 있는 기존 팀을 찾지 못했다냥." });
+    const existingGuildTeam = await prisma.team.findFirst({ where: { guildId: access.guild.id }, select: { id: true } });
+    if (existingGuildTeam && existingGuildTeam.id !== legacyTeam.id) {
+      return res.status(409).json({ error: "이 Discord 서버에는 이미 TORO 팀이 연결되어 있다냥." });
+    }
+    try {
+      await prisma.team.update({
+        where: { id: legacyTeam.id },
+        data: { guildId: access.guild.id, name: access.guild.name, ownerId: access.guild.ownerId },
+      });
+    } catch {
+      return res.status(409).json({ error: "기존 팀을 Discord 서버에 연결하지 못했다냥. 서버 연결 상태를 다시 확인해줘." });
+    }
+  }
 
   const displayName = access.session.user.global_name || access.session.user.username;
   const { team, member } = await resolveTeamContext({
