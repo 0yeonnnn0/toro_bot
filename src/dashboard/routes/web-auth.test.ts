@@ -55,10 +55,11 @@ describe("web Discord auth routes", () => {
     expect(callback.status).toBe(302);
     expect(callback.headers.get("location")).toBe("/teams");
     expect(session.status).toBe(200);
-    await expect(session.json()).resolves.toMatchObject({
+    const sessionBody = await session.json();
+    expect(sessionBody).toMatchObject({
       user: { id: "user_1", displayName: "테스터" },
-      guilds: [{ id: "guild_1", name: "관리 서버" }],
     });
+    expect(sessionBody).not.toHaveProperty("guilds");
   });
 
   it("rejects a callback whose state cookie does not match", async () => {

@@ -83,7 +83,7 @@ export function createWebAuthRouter(overrides: Partial<WebAuthDependencies> = {}
     const avatarUrl = session.user.avatar
       ? `https://cdn.discordapp.com/avatars/${session.user.id}/${session.user.avatar}.png?size=128`
       : null;
-    return res.json({ user: { id: session.user.id, displayName, avatarUrl }, guilds: session.guilds });
+    return res.json({ user: { id: session.user.id, displayName, avatarUrl } });
   });
 
   router.post("/auth/logout", (req, res) => {
