@@ -7,4 +7,11 @@ describe("registered Discord commands", () => {
 
     expect(names).not.toContain("ask");
   });
+
+  it("keeps team setup and login on the web", () => {
+    const names = commands.map(command => command.name);
+
+    expect(names).not.toContain("login");
+    expect(names).not.toContain("team");
+  });
 });

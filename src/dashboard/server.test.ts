@@ -34,9 +34,13 @@ describe("createServer", () => {
       const base = `http://127.0.0.1:${addr.port}`;
 
       const callback = await fetch(`${base}/api/calendar/oauth/callback?state=missing-code`);
+      const discordSession = await fetch(`${base}/api/auth/session`);
+      const accountGuilds = await fetch(`${base}/api/account/guilds`);
       const overview = await fetch(`${base}/api/teams/overview`);
 
       expect(callback.status).toBe(400);
+      expect(discordSession.status).toBe(401);
+      expect(accountGuilds.status).toBe(401);
       expect(overview.status).toBe(401);
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));

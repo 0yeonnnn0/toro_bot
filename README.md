@@ -1,21 +1,22 @@
 # TORO
 
 친구들 디스코드 서버에 상주하며 자연스럽게 대화에 끼어드는 AI 봇.
-단순한 명령어 봇이 아니라, 서버/팀 단위로 로그인·기억·일정·음악·AI 대화를 함께 관리한다.
+단순한 명령어 봇이 아니라, Discord 서버 단위로 기억·일정·음악·AI 대화를 함께 관리한다.
 
 ## 핵심 기능
 
 ### 팀 기반 사용
-- Discord 서버(guild)마다 하나의 팀을 만들고 팀 멤버로 로그인한다.
-- `/team create`로 팀을 만들고, `/team invite`로 초대 코드를 발급한다.
-- `/login`으로 웹 로그인 링크를 받아 대시보드/웹 채팅을 사용한다.
-- 같은 서버에서 팀이 중복 생성되지 않도록 막는다.
+- Discord 서버(guild) 하나를 TORO 팀 하나로 사용한다.
+- 서버에서 `@TORO`를 처음 부르면 팀과 멤버가 자동으로 연결된다.
+- 팀 생성·초대·전환 명령 없이 Discord 서버 멤버십을 그대로 사용한다.
+- `/login`에서 Discord OAuth로 로그인하면 관리 권한이 있는 서버의 팀 상태와 멤버를 확인할 수 있다.
+- 기존 `guildId` 없는 팀은 DM 접근을 보존하며, 소유자가 `/teams`에서 관리 중인 Discord 서버에 대화·메모·캘린더 데이터 그대로 연결할 수 있다.
 
 ### 대화 참여
 - **멘션 기반 답변** — 기본적으로 일반 대화에는 끼어들지 않고, `@TORO`로 부르면 같은 채널/스레드에 답변한다.
 - **맥락 기준** — 멘션 답변은 현재 채널/스레드의 최근 2시간 내 메시지를 우선 참고한다. 최근 2시간 메시지가 50개 미만이면 시간 범위를 넓혀 최근 50개 메시지까지 사용한다.
 - **직접 질문** — Discord에서 `@TORO`로 멘션해 질문한다.
-- **팀 미가입 안내** — 팀이 없거나 로그인하지 않은 사용자는 멘션 시 가입 방법을 안내받는다.
+- **자동 팀 연결** — 별도 로그인 없이 현재 Discord 서버의 팀과 멤버로 자동 연결된다.
 - **대화 기억** — 채널/팀 단위 최근 대화와 저장된 대화/메모/RAG를 바탕으로 맥락을 유지한다.
 - **웹 참고** — URL이 포함되면 페이지 내용을 읽고, 최신 정보가 필요한 표현(검색/최신/뉴스/가격/추천/비교/어떻게 생각 등)이 있으면 웹 검색 결과를 함께 참고한다.
 - **응답 제어** — `/mute`로 채널별 멘션 응답을 임시로 끄고, `/mute-status`로 상태를 확인한다.
@@ -73,10 +74,6 @@
 
 | 명령어 | 설명 |
 |--------|------|
-| `/team create` | 현재 Discord 서버의 TORO 팀 생성 |
-| `/team info` | 현재 서버의 팀 정보 확인 |
-| `/team invite` | 팀 초대 코드 발급 |
-| `/login` | 웹 로그인 링크 발급 |
 | `/memo` | 팀 메모 저장 |
 | `/mode` | 성격 프리셋 보기/변경 |
 | `/draw` | AI 이미지 생성 |
@@ -98,6 +95,12 @@
 | `/autoplay` | 자동 추천 재생 |
 
 ## 웹 서비스
+
+### 팀 관리 (`/login`, `/teams`)
+- Discord OAuth로 로그인한다.
+- Discord에서 서버 관리 권한이 있는 서버만 표시한다.
+- 서버별 TORO 설치 여부, 팀 연결 상태, 확인된 멤버와 캘린더 연결 상태를 확인한다.
+- 팀 관리 작업 시 봇이 현재 Discord 멤버십과 서버 관리 권한을 다시 확인한다.
 
 ### 웹 채팅 (`/chat`)
 - Discord 없이 웹에서 캐릭터와 대화한다.
@@ -161,6 +164,9 @@ cp .env.example .env
 |------|------|
 | `DISCORD_TOKEN` | Discord 봇 토큰 |
 | `OWNER_ID` | 봇 주인 Discord ID |
+| `DISCORD_CLIENT_ID` | Discord 애플리케이션 ID. 웹 팀 로그인에 사용 |
+| `DISCORD_CLIENT_SECRET` | Discord OAuth2 client secret. `.env`에만 저장 |
+| `DISCORD_REDIRECT_URI` | Discord OAuth callback. 비우면 `${TORO_PUBLIC_URL}/api/auth/discord/callback` |
 | `DASHBOARD_PORT` | 웹 서버 포트. 기본 `3000` |
 | `DASHBOARD_SECRET` | 관리자 대시보드 비밀번호 |
 | `TORO_PUBLIC_URL` | OAuth callback 등에 쓰는 외부 HTTPS origin |
@@ -292,11 +298,14 @@ sudo docker exec -it toro-bot sh -lc 'curl -fsS http://localhost:${DASHBOARD_POR
 ## 기본 사용 흐름
 
 1. Discord 서버에 TORO 봇을 초대한다.
-2. 서버 관리자 또는 봇 주인이 `/team create`를 실행한다.
-3. 필요한 멤버에게 `/team invite`로 초대 코드를 공유한다.
-4. 사용자는 `/login`으로 웹 로그인 링크를 받는다.
-5. `@TORO` 멘션과 `/draw`, `/play` 등 기능을 사용한다.
-6. 웹에서는 `/admin`으로 설정을 관리하고 `/admin/stored`에서 저장된 메모/대화를 확인한다.
+2. `@TORO`로 부르면 현재 Discord 서버가 팀으로 자동 연결된다.
+3. 팀 관리가 필요하면 웹 `/login`에서 Discord로 로그인한다.
+4. `/teams`에서 관리 가능한 서버의 팀과 멤버 상태를 확인한다.
+5. Discord에서는 `@TORO` 멘션과 `/draw`, `/play` 등 기능을 사용한다.
+6. 운영자는 `/admin`에서 봇 설정을 관리하고 `/admin/stored`에서 저장된 메모/대화를 확인한다.
+
+Discord Developer Portal의 OAuth2 Redirects에는 운영 기준
+`https://bot.yeonnnn.xyz/api/auth/discord/callback`을 등록한다.
 
 ## 검증 명령
 
