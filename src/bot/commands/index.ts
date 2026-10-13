@@ -6,9 +6,7 @@ import {
 import { commands } from "./definitions";
 import { handleSummary } from "./chat";
 import { handleHelp, handleStatus } from "./settings";
-import { handleCalendarCommand } from "./calendar";
-import { handleDraw, handleSay } from "./media";
-import { handleMyInfo } from "./vault";
+import { handleDraw } from "./media";
 import { handleMute, handleMuteStatus } from "./mute";
 import {
   handlePlay, handleSkip, handleStop, handlePause,
@@ -38,9 +36,7 @@ export async function handleInteraction(interaction: ChatInputCommandInteraction
   const { commandName } = interaction;
 
   switch (commandName) {
-    case "calendar":
-      await handleCalendarCommand(interaction);
-      break;
+
     case "help":
       await handleHelp(interaction);
       break;
@@ -59,12 +55,7 @@ export async function handleInteraction(interaction: ChatInputCommandInteraction
     case "draw":
       await handleDraw(interaction);
       break;
-    case "say":
-      await handleSay(interaction);
-      break;
-    case "내정보":
-      await handleMyInfo(interaction);
-      break;
+
     case "play":
       await handlePlay(interaction);
       break;

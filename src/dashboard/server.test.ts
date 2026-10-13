@@ -23,7 +23,7 @@ describe("createServer", () => {
     expect(routes.length).toBeGreaterThan(0);
   });
 
-  it("keeps Google OAuth callback public while protecting admin APIs", async () => {
+  it("does not expose web chat, team login, calendar, or memory APIs", async () => {
     const app = createServer();
     const server: Server = await new Promise((resolve) => {
       const s = app.listen(0, () => resolve(s));
@@ -32,16 +32,25 @@ describe("createServer", () => {
       const addr = server.address();
       if (!addr || typeof addr === "string") throw new Error("No test server address");
       const base = `http://127.0.0.1:${addr.port}`;
+      const headers = { authorization: "test-secret-123" };
 
-      const callback = await fetch(`${base}/api/calendar/oauth/callback?state=missing-code`);
-      const discordSession = await fetch(`${base}/api/auth/session`);
-      const accountGuilds = await fetch(`${base}/api/account/guilds`);
-      const overview = await fetch(`${base}/api/teams/overview`);
+      const paths = [
+        "/api/chat/characters",
+        "/api/auth/session",
+        "/api/account/guilds",
+        "/api/teams/overview",
+        "/api/calendar/oauth/callback",
+        "/api/rag-stats",
+        "/api/stored/conversations",
+        "/api/presets",
+        "/api/chat-logs",
+        "/api/chat-logs/stats",
+        "/api/user-stats",
+        "/api/keywords",
+      ];
+      const responses = await Promise.all(paths.map(path => fetch(base + path, { headers })));
 
-      expect(callback.status).toBe(400);
-      expect(discordSession.status).toBe(401);
-      expect(accountGuilds.status).toBe(401);
-      expect(overview.status).toBe(401);
+      expect(responses.map(response => response.status)).toEqual(paths.map(() => 404));
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
     }
@@ -61,6 +70,31 @@ describe("createServer", () => {
 
       expect(health.status).toBe(200);
       await expect(health.json()).resolves.toEqual({ ok: true });
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
+    }
+  });
+
+  it("fails closed for admin APIs when no dashboard secret is configured", async () => {
+    state.config.dashboardSecret = "";
+    const app = createServer();
+    const server: Server = await new Promise((resolve) => {
+      const s = app.listen(0, () => resolve(s));
+    });
+    try {
+      const addr = server.address();
+      if (!addr || typeof addr === "string") throw new Error("No test server address");
+      const base = `http://127.0.0.1:${addr.port}`;
+
+      const [queues, musicLogs] = await Promise.all([
+        fetch(`${base}/api/music/queues`),
+        fetch(`${base}/api/music-logs`),
+      ]);
+
+      expect(queues.status).toBe(503);
+      expect(musicLogs.status).toBe(200);
+      const logs = await musicLogs.json() as Record<string, unknown>[];
+      expect(logs.every(log => !("requestedBy" in log))).toBe(true);
     } finally {
       await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));
     }

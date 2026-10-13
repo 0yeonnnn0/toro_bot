@@ -26,79 +26,12 @@ async function callProvider(provider: string, model: string, history: HistoryMes
   }
 }
 
-export async function getReply(history: HistoryMessage[], ragContext: string = "", userId: string = ""): Promise<string> {
+export async function getReply(history: HistoryMessage[], requestContext: string = "", userId: string = ""): Promise<string> {
   const basePrompt = buildPromptWithCustom(userId);
   const parts = [`<persona>\n${basePrompt}\n</persona>`];
-  if (ragContext) parts.push(`<memory>\n${ragContext}\n</memory>`);
+  if (requestContext) parts.push(`<request_context>\n${requestContext}\n</request_context>`);
   parts.push(`<task>\n위 대화에 자연스럽게 답변해. persona의 성격과 말투를 반드시 유지해.\n</task>`);
   return callAI(history, parts.join("\n\n"));
-}
-
-export const DEFAULT_JUDGE_PROMPT = `너는 디스코드 채팅방을 지켜보는 봇이야.
-아래 대화를 보고, 네가 자연스럽게 끼어들 수 있는 상황이면 답변해.
-끼어드는 게 어색하거나 굳이 필요 없으면 정확히 "<SKIP>"이라고만 답해.
-
-중요: 기본값은 "<SKIP>"이야. 확실히 끼어들 만한 이유가 있을 때만 답변해. 애매하면 SKIP해.
-
-<rules>
-끼어들면 좋은 상황:
-- 누가 너에 대해 직접 이야기하거나 의견을 물을 때
-- 네가 확실히 재밌는 드립을 칠 수 있을 때
-- 질문이 공중에 떠 있고 아무도 안 답할 때
-- 대화가 한참 멈춰서 분위기가 심심할 때
-- 누가 링크를 공유했는데 아무도 반응이 없을 때
-- 이미지가 첨부되었는데 재밌거나 반응할 만할 때
-
-끼어들지 말아야 할 상황:
-- 두 사람이 대화를 주고받는 중이면 절대 끼어들지 마 (티키타카 중엔 SKIP)
-- 대화가 잘 흘러가고 있으면 굳이 끼어들 필요 없어
-- 맥락을 잘 모르는 대화일 때
-- 방금 네가 이미 말한 직후일 때
-- 상대방이 아직 말을 끝내지 않은 것 같을 때
-- "ㅋㅋ", "ㅇㅇ", "ㄹㅇ", "ㅇㅈ" 같은 짧은 리액션만 있을 때
-- 누군가의 말에 다른 사람이 이미 잘 대답했을 때
-</rules>
-
-<examples>
-<example>
-<conversation>A: 오늘 치킨 먹을까 / B: 오 좋아 뭐 시키지</conversation>
-<reasoning>두 사람이 티키타카 중</reasoning>
-<decision><SKIP></decision>
-</example>
-<example>
-<conversation>A: 이 버그 어떻게 고치지...</conversation>
-<reasoning>질문이 허공에 떠 있고 아무도 안 답함</reasoning>
-<decision>답변</decision>
-</example>
-<example>
-<conversation>A: ㅋㅋㅋㅋ / B: ㄹㅇ</conversation>
-<reasoning>짧은 리액션만 오감</reasoning>
-<decision><SKIP></decision>
-</example>
-<example>
-<conversation>A: 토로 요즘 뭐해?</conversation>
-<reasoning>봇에 대한 직접 언급</reasoning>
-<decision>답변</decision>
-</example>
-<example>
-<conversation>A: 나 시험 망했어 / B: 에이 괜찮아 / A: ㅠㅠ 고마워</conversation>
-<reasoning>B가 이미 잘 위로해줬고 대화가 마무리되는 중</reasoning>
-<decision><SKIP></decision>
-</example>
-</examples>`;
-
-function getJudgePrompt(): string {
-  return state.config.judgePrompt || DEFAULT_JUDGE_PROMPT;
-}
-
-export async function judgeAndReply(history: HistoryMessage[], ragContext: string = "", userId: string = ""): Promise<string | null> {
-  const basePrompt = buildPromptWithCustom(userId);
-  const parts = [`<persona>\n${basePrompt}\n</persona>`];
-  if (ragContext) parts.push(`<memory>\n${ragContext}\n</memory>`);
-  parts.push(`<task>\n${getJudgePrompt()}\n</task>`);
-  const reply = await callAI(history, parts.join("\n\n"));
-  if (reply.trim() === "<SKIP>") return null;
-  return reply;
 }
 
 function hasImageInput(history: HistoryMessage[]): boolean {

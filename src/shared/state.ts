@@ -37,12 +37,6 @@ export interface ErrorEntry {
   detail: string;
 }
 
-export interface UserStat {
-  displayName: string;
-  messages: number;
-  gotReplies: number;
-}
-
 export type ReplyMode = "auto" | "interval" | "mute";
 
 export interface Config {
@@ -79,8 +73,6 @@ export interface State {
   };
   events: EventEntry[];
   errors: ErrorEntry[];
-  userStats: Record<string, UserStat>;
-  keywords: Record<string, number>;
 }
 
 // ── Load ──
@@ -138,8 +130,6 @@ export const state: State = {
   },
   events: saved?.events ?? [],
   errors: saved?.errors ?? [],
-  userStats: saved?.userStats ?? {},
-  keywords: saved?.keywords ?? {},
 };
 
 // Migrate existing in-memory logs to file-based storage
@@ -158,8 +148,6 @@ export function saveState(): void {
       stats: { messagesProcessed: state.stats.messagesProcessed, repliesSent: state.stats.repliesSent },
       events: state.events,
       errors: state.errors,
-      userStats: state.userStats,
-      keywords: state.keywords,
     }));
   } catch (err) {
     console.error("상태 저장 실패:", (err as Error).message);
@@ -184,49 +172,4 @@ export function addEvent(type: string, detail: string = ""): void {
 export function addError(type: string, message: string, detail: string = ""): void {
   state.errors.push({ timestamp: Date.now(), type, message, detail });
   if (state.errors.length > MAX_EVENTS) state.errors.shift();
-}
-
-// ── User tracking ──
-export function trackUser(userId: string, displayName: string, botReplied: boolean): void {
-  if (!state.userStats[userId]) {
-    state.userStats[userId] = { displayName, messages: 0, gotReplies: 0 };
-  }
-  const user = state.userStats[userId];
-  user.displayName = displayName;
-  user.messages++;
-  if (botReplied) user.gotReplies++;
-}
-
-// ── Keywords ──
-const STOP_WORDS = new Set([
-  "이", "그", "저", "것", "수", "등", "더", "좀", "잘", "못",
-  "안", "걍", "ㅋㅋ", "ㅎㅎ", "ㅇㅇ", "ㄴㄴ", "ㄹㅇ", "the",
-  "is", "a", "an", "and", "or", "to", "in", "of", "for", "it",
-  "나", "너", "우리", "얘", "걔", "뭐", "왜", "어", "아", "응",
-  "네", "예", "진짜", "근데", "그래", "했어", "했는데", "하는",
-]);
-
-export function trackKeywords(content: string): void {
-  const words = content
-    .replace(/<@!?\d+>/g, "")
-    .replace(/[^\w가-힣]/g, " ")
-    .split(/\s+/)
-    .filter((w) => w.length >= 2 && !STOP_WORDS.has(w) && !/^\d+$/.test(w));
-
-  for (const word of words) {
-    state.keywords[word] = (state.keywords[word] || 0) + 1;
-  }
-}
-
-export function getTopKeywords(n: number = 20): { word: string; count: number }[] {
-  return Object.entries(state.keywords)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, n)
-    .map(([word, count]) => ({ word, count }));
-}
-
-export function getUserStatsRanked(): (UserStat & { id: string })[] {
-  return Object.entries(state.userStats)
-    .map(([id, data]) => ({ id, ...data }))
-    .sort((a, b) => b.messages - a.messages);
 }

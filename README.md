@@ -1,349 +1,140 @@
 # TORO
 
-친구들 디스코드 서버에 상주하며 자연스럽게 대화에 끼어드는 AI 봇.
-단순한 명령어 봇이 아니라, Discord 서버 단위로 기억·일정·음악·AI 대화를 함께 관리한다.
+친구들 Discord 서버에서 **최근 대화를 읽고, 지금 필요한 정리·선택·음악·이미지를 처리한 뒤 잊는 AI 친구**다.
+
+> 불러서 정리하고, 고르고, 놀고, 끝나면 잊는다.
+
+## 제품 원칙
+
+- TORO는 `@멘션`을 받았을 때만 대화에 참여한다.
+- 요청 시점에 현재 채널·스레드의 Discord 메시지를 읽는다.
+- 최근 2시간 메시지를 우선 사용하고, 50개 미만이면 최근 50개까지 범위를 넓힌다.
+- 일반 채팅을 내부 버퍼·DB·RAG·Obsidian에 수집하지 않는다.
+- 대화 원문, 답변 원문, 사용자 프로필을 운영 로그에 남기지 않는다.
+- 별도 사용자 가입, 팀 생성, 캐릭터 프리셋, 오늘의 NPC가 없다.
 
 ## 핵심 기능
 
-### 팀 기반 사용
-- Discord 서버(guild) 하나를 TORO 팀 하나로 사용한다.
-- 서버에서 `@TORO`를 처음 부르면 팀과 멤버가 자동으로 연결된다.
-- 팀 생성·초대·전환 명령 없이 Discord 서버 멤버십을 그대로 사용한다.
-- `/login`에서 Discord OAuth로 로그인하면 관리 권한이 있는 서버의 팀 상태와 멤버를 확인할 수 있다.
-- 기존 `guildId` 없는 팀은 DM 접근을 보존하며, 소유자가 `/teams`에서 관리 중인 Discord 서버에 대화·메모·캘린더 데이터 그대로 연결할 수 있다.
+### 대화·정리·선택
 
-### 대화 참여
-- **멘션 기반 답변** — 기본적으로 일반 대화에는 끼어들지 않고, `@TORO`로 부르면 같은 채널/스레드에 답변한다.
-- **맥락 기준** — 멘션 답변은 현재 채널/스레드의 최근 2시간 내 메시지를 우선 참고한다. 최근 2시간 메시지가 50개 미만이면 시간 범위를 넓혀 최근 50개 메시지까지 사용한다.
-- **직접 질문** — Discord에서 `@TORO`로 멘션해 질문한다.
-- **자동 팀 연결** — 별도 로그인 없이 현재 Discord 서버의 팀과 멤버로 자동 연결된다.
-- **대화 기억** — 채널/팀 단위 최근 대화와 저장된 대화/메모/RAG를 바탕으로 맥락을 유지한다.
-- **웹 참고** — URL이 포함되면 페이지 내용을 읽고, 최신 정보가 필요한 표현(검색/최신/뉴스/가격/추천/비교/어떻게 생각 등)이 있으면 웹 검색 결과를 함께 참고한다.
-- **응답 제어** — `/mute`로 채널별 멘션 응답을 임시로 끄고, `/mute-status`로 상태를 확인한다.
-- **멘션 자동 변환** — 봇이 `@유저이름`을 실제 Discord 멘션으로 변환한다.
+- `@TORO 질문` — 현재 채널·스레드의 최근 대화를 바탕으로 답변
+- `@TORO 정리해줘` — 결정된 내용, 할 일, 미정 사항 정리
+- `@TORO 골라줘` — 대화에 나온 후보 중 하나를 선택
+- `/summary` — 최근 Discord 대화 요약
+- 최신 정보가 필요할 때 사용하는 간단한 웹 검색
+- 첨부 이미지 인식
 
-### 메모와 저장된 대화
-- `/memo`로 팀 메모를 저장한다.
-- 대화 기록은 팀 단위로 저장된다.
-- 웹 대시보드의 `/admin/stored`에서 저장된 메모와 대화 기록을 확인할 수 있다.
+### 파티 음악
 
-### Google Calendar 연동
-- 팀 단위로 Google Calendar OAuth를 연결한다.
-- OAuth callback은 Google redirect가 막히지 않도록 public endpoint로 열려 있다.
-- OAuth state는 서명·만료 검증을 거치며, callback 시 팀 관리자 권한도 다시 확인한다.
+- `/play` — YouTube 검색 또는 URL 재생
+- `/skip`, `/stop`, `/pause` — 재생 제어
+- `/queue`, `/remove`, `/nowplaying` — 대기열 관리
+- `/volume` — 볼륨 조절
+- `/autoplay` — 추천 자동 재생
+- `/music` — 현재 음악 큐를 확인하는 공개 웹 화면
 
-### 음악 재생
-- `/play`로 YouTube 검색 후 결과에서 선택한다.
-- URL 직접 입력 가능.
-- `/skip`, `/stop`, `/pause`로 재생을 제어한다.
-- `/queue`, `/remove`, `/nowplaying`으로 대기열을 관리한다.
-- `/volume`으로 볼륨을 조절한다. 기본값은 30%다.
-- `/autoplay`로 YouTube Radio Mix 기반 자동 추천을 켠다.
-- 봇 프로필에 현재 재생 중인 곡을 표시한다.
-- 15분 길이 제한, 유저가 전부 나가면 즉시 퇴장한다.
+공개 음악 기록은 곡 정보만 제공하며 Discord 요청자 이름과 사용자 순위는 저장하거나 노출하지 않는다.
 
-### 성격 프리셋
-- `/mode`로 여러 성격/말투를 전환한다.
-- 기본 제공: 건방진 고양이(냥체), 친구 말투 모사 등.
-- 커스텀 프리셋 추가/편집/순서 변경과 프리셋별 기본 음성을 지원한다.
+### 이미지
 
-### AI 이미지 생성
-- `/draw`로 텍스트 프롬프트를 이미지로 생성한다.
-- Codex CLI/ChatGPT 로그인 세션을 우선 사용해 이미지 파일을 생성한다.
-- OpenAI API 키가 있으면 Codex 실패 시 `OPENAI_IMAGE_MODEL=gpt-image-1.5`로 fallback한다. OpenAI도 없거나 실패하면 `GOOGLE_API_KEY`로 Gemini 이미지 모델을 fallback으로 사용한다.
-- `/draw quality:flash`는 빠른 초안, `quality:pro`는 고품질 요청으로 처리한다.
+- `/draw` 또는 자연어 이미지 요청
+- Codex CLI/ChatGPT 로그인 세션을 우선 사용
 
-### 음성 답변 (TTS)
-- `/say`로 캐릭터 말투 답변과 음성 파일을 받는다. 기본 TTS는 API key 없는 Edge TTS를 사용한다.
+### 운영
 
-### 대화 요약
-- `/summary`로 최근 대화를 주제별로 정리한다.
+- `/mute`, `/mutestatus` — 채널별 멘션 응답 제어
+- `/status` — 봇 상태 확인
+- `/admin` — 집계 상태, 비식별 요청 로그, 모델 설정, 음악 관리
+- `/healthz` — 공개 healthcheck
 
-### 유저 기억 / Obsidian 연동
-- 대화에서 유저 정보를 자동 추출·기록한다.
-- `[[Obsidian 링크]]`로 그래프 뷰 연결이 가능하다.
-- `/내정보`로 봇이 기억하는 내 정보를 확인한다.
-- 음악 검색 관련 내용은 기억에 저장하지 않는다.
+## 제거된 기능
 
-### 이미지 인식 / 링크·웹 읽기
-- Discord 이미지 첨부 시 AI가 이미지를 인식하고 반응한다.
-- URL 공유 시 내용을 읽어 대화 맥락에 반영한다.
-- 검색/최신/뉴스/가격/추천/비교/어떻게 생각 같은 표현이 있으면 가벼운 웹 검색 결과를 추가 맥락으로 붙인다.
+- 일반 대화 자동 난입
+- 장기 대화 DB와 RAG 기억
+- Obsidian 사용자 정보 추출과 `/내정보`
+- 팀 메모와 Calendar OAuth
+- 공개 웹 AI 채팅
+- Discord OAuth 팀 관리 화면
+- 말투 프리셋과 오늘의 NPC
+- `/say` TTS 명령
+
+기존 DB 스키마와 일부 비활성 모듈은 안전한 롤백을 위해 당분간 남아 있을 수 있지만, 런타임과 사용자 화면에서는 호출하지 않는다. 시작 시 과거 음악 기록의 요청자 이름은 제거되고, 과거 `userStats`·`keywords` 상태는 다음 상태 저장 때 제외된다. 롤백 기간이 끝나면 운영자가 백업 후 `data/chat-logs.json`, `data/vectors/`, 기존 사용자 메모 파일을 삭제한다.
 
 ## 슬래시 명령어
 
-| 명령어 | 설명 |
-|--------|------|
-| `/memo` | 팀 메모 저장 |
-| `/mode` | 성격 프리셋 보기/변경 |
-| `/draw` | AI 이미지 생성 |
-| `/say` | 음성으로 답변 (TTS) |
-| `/summary` | 최근 대화 요약 |
-| `/reply` | 응답 모드 변경 |
-| `/mute` | 채널 임시 음소거 |
-| `/mute-status` | 음소거 남은 시간 확인 |
-| `/내정보` | 봇이 기억하는 내 정보 확인 |
-| `/status` | 봇 상태 확인 |
-| `/play` | YouTube 음악 검색/재생 |
-| `/skip` | 현재 곡 스킵 |
-| `/stop` | 음악 정지 + 퇴장 |
-| `/pause` | 일시정지/재개 |
-| `/queue` | 대기열 보기 |
-| `/nowplaying` | 현재 곡 정보 |
-| `/remove` | 대기열에서 곡 제거 |
-| `/volume` | 볼륨 조절 (0~100%) |
-| `/autoplay` | 자동 추천 재생 |
+- 대화: `/help`, `/summary`, `/status`, `/mute`, `/mutestatus`
+- 이미지: `/draw`
+- 음악: `/play`, `/skip`, `/stop`, `/pause`, `/queue`, `/nowplaying`, `/volume`, `/autoplay`, `/remove`
 
-## 웹 서비스
-
-### 팀 관리 (`/login`, `/teams`)
-- Discord OAuth로 로그인한다.
-- Discord에서 서버 관리 권한이 있는 서버만 표시한다.
-- 서버별 TORO 설치 여부, 팀 연결 상태, 확인된 멤버와 캘린더 연결 상태를 확인한다.
-- 팀 관리 작업 시 봇이 현재 Discord 멤버십과 서버 관리 권한을 다시 확인한다.
-
-### 웹 채팅 (`/chat`)
-- Discord 없이 웹에서 캐릭터와 대화한다.
-- 카카오톡 스타일 UI와 모바일 화면을 지원한다.
-- 프리셋 캐릭터를 선택해서 대화할 수 있다.
-
-### 관리자 대시보드 (`/admin`)
-- 실시간 통계, 유저 랭킹, 트렌딩 키워드.
-- 날짜별 메시지/이벤트/에러 로그.
-- AI 모델, 응답 모드, 프리셋, 임베딩 모델, API 키, RAG 메모리 관리.
-- Google Calendar 연동 관리.
-- 실시간 봇 테스트 채팅.
-
-### 저장 데이터 확인 (`/admin/stored`)
-- 팀별 저장 메모 확인.
-- 작성자 Discord user id와 저장 시각 확인.
-- 팀별 conversation history 확인.
-- 최근 대화 메시지 확인.
+AI 질문의 기본 진입점은 슬래시 명령이 아니라 `@TORO` 멘션이다.
 
 ## 기술 스택
 
-| 구분 | 기술 |
-|------|------|
-| Backend | Node.js + TypeScript + Express |
-| Frontend | React 19 + Vite |
-| Discord | discord.js v14 (`MessageContent`, `Read Message History` 필요) |
-| DB/ORM | SQLite + Prisma |
-| AI | Codex CLI main / Gemini fallback / OpenAI GPT / Anthropic Claude |
-| 벡터 검색 | Vectra |
-| 음악 | @discordjs/voice + yt-dlp + FFmpeg |
-| 유저 기억 | Obsidian 볼트 (.md 파일) |
-| 배포 | Docker / Docker Compose |
+- Backend: Node.js, TypeScript, Express
+- Frontend: React, Vite
+- Discord: discord.js v14
+- AI: Codex CLI 중심, Google/OpenAI/Anthropic 선택 가능
+- Music: `@discordjs/voice`, yt-dlp, FFmpeg
+- Deployment: Docker Compose, GitHub Actions, Watchtower
 
 ## Discord 권한
 
-멘션 답변이 최근 대화 맥락을 읽으려면 Discord Developer Portal과 서버 초대 권한에서 다음이 필요하다.
+최근 대화 맥락을 읽으려면 다음 권한이 필요하다.
 
-- Privileged Gateway Intent: `Message Content Intent` 활성화
-- 서버/채널 권한: `View Channel`, `Read Message History`, `Send Messages`
-- 스레드 사용 시: `Send Messages in Threads`, `Read Message History`
-
-권한이 부족하면 `@TORO 어떻게 생각해?` 같은 멘션에는 답할 수 있어도, 최근 2시간/50개 메시지 맥락이 비거나 일부만 들어갈 수 있다.
+- Developer Portal: `Message Content Intent`
+- 채널: `View Channel`, `Read Message History`, `Send Messages`
+- 스레드: `Send Messages in Threads`, `Read Message History`
 
 ## 설치
 
 ```bash
-git clone https://github.com/0yeonnnn0/toro_bot.git
-cd toro_bot
+git clone https://github.com/0yeonnnn0/discord_bot.git
+cd discord_bot
 npm install
 cd frontend && npm install && npm run build && cd ..
 npx prisma generate
 ```
 
-## 환경변수
+## 주요 환경변수
 
 ```bash
 cp .env.example .env
 ```
 
-| 변수 | 설명 |
-|------|------|
-| `DISCORD_TOKEN` | Discord 봇 토큰 |
-| `OWNER_ID` | 봇 주인 Discord ID |
-| `DISCORD_CLIENT_ID` | Discord 애플리케이션 ID. 웹 팀 로그인에 사용 |
-| `DISCORD_CLIENT_SECRET` | Discord OAuth2 client secret. `.env`에만 저장 |
-| `DISCORD_REDIRECT_URI` | Discord OAuth callback. 비우면 `${TORO_PUBLIC_URL}/api/auth/discord/callback` |
-| `DASHBOARD_PORT` | 웹 서버 포트. 기본 `3000` |
-| `DASHBOARD_SECRET` | 관리자 대시보드 비밀번호 |
-| `TORO_PUBLIC_URL` | OAuth callback 등에 쓰는 외부 HTTPS origin |
-| `PUBLIC_BASE_URL`, `DASHBOARD_PUBLIC_URL` | `TORO_PUBLIC_URL`의 호환 alias. 보통 비워둠 |
-| `DATABASE_URL` | Prisma DB URL. Docker 기본값은 `file:/app/data/toro.db` |
-| `AI_PROVIDER` | `codex` / `google` / `openai` / `anthropic`. 기본값은 Codex CLI |
-| `CODEX_HOME` | 컨테이너 안 Codex CLI 로그인 캐시 경로. 기본 `/codex` |
-| `CODEX_HOME_HOST` | 호스트에서 마운트할 Codex CLI 로그인 캐시 경로. 기본 `./codex` |
-| `CODEX_BIN` | Codex 실행 파일 경로 override. 비우면 `PATH`의 `codex` 사용 |
-| `CODEX_WORKDIR` | Codex 채팅 응답 실행 작업 디렉터리. 비우면 OS temp dir 사용 |
-| `CODEX_MODEL` | Codex CLI 모델. 기본 `codex-cli-default`이면 CLI 설정 기본 모델 사용 |
-| `CODEX_TIMEOUT_MS` | Codex CLI 호출 타임아웃. 기본 `180000` |
-| `CODEX_IMAGE_TIMEOUT_MS` | `/draw` Codex 이미지 생성 타임아웃. 기본 `300000` |
-| `CODEX_USE_NPX` | `CODEX_BIN`이 없을 때 `npx -y @openai/codex` 사용 여부. `1`이면 사용 |
-| `GOOGLE_API_KEY` | Google AI API 키. Codex CLI 실패 시 Gemini fallback과 RAG embedding에 사용 |
-| `GOOGLE_MODEL` | Google 채팅 모델. 기본 `gemini-3.1-flash-lite-preview` |
-| `GOOGLE_FALLBACK_MODEL` | AI fallback용 Google 모델. 기본은 `GOOGLE_MODEL` |
-| `GOOGLE_IMAGE_MODEL` | `/draw` Google 이미지 fallback 모델. 기본 `gemini-2.5-flash-image-preview` |
-| `OPENAI_API_KEY` | OpenAI API 키. OpenAI API provider, `/draw` fallback, `/say` OpenAI fallback에서 사용 |
-| `OPENAI_MODEL` | OpenAI API 텍스트 모델. 기본 `gpt-4o` |
-| `OPENAI_IMAGE_MODEL` | `/draw` OpenAI API fallback 이미지 모델. 기본 `gpt-image-1.5` |
-| `TORO_TTS_PROVIDER` | `/say` TTS provider. 기본 `edge`라 API key가 필요 없음. `openai`로 설정하면 OpenAI TTS 우선 |
-| `EDGE_TTS_VOICE` | Edge TTS 음성 override. 기본 한국어 `ko-KR-SunHiNeural` / `ko-KR-InJoonNeural` |
-| `EDGE_TTS_PYTHON` | Edge TTS 실행 Python. 기본 `python3` |
-| `EDGE_TTS_TIMEOUT_MS` | Edge TTS 타임아웃. 기본 `60000` |
-| `EDGE_TTS_RATE`, `EDGE_TTS_PITCH`, `EDGE_TTS_VOLUME` | Edge TTS 말속도/피치/볼륨 override |
-| `OPENAI_TTS_MODEL` | `/say` OpenAI fallback TTS 모델. 기본 `gpt-4o-mini-tts` |
-| `ANTHROPIC_API_KEY` | Anthropic API 키 |
-| `TOKEN_ENCRYPTION_KEY` | OAuth token 암호화 키. 없으면 production에서 `data/token-encryption.key`를 자동 생성 |
-| `TOKEN_ENCRYPTION_KEY_FILE` | 자동 생성/읽기할 OAuth 암호화 키 파일 경로. 기본 `./data/token-encryption.key` |
-| `GOOGLE_CLIENT_ID` | Google Calendar OAuth client id |
-| `GOOGLE_CLIENT_SECRET` | Google Calendar OAuth client secret |
-| `GOOGLE_REDIRECT_URI` | Google Calendar OAuth callback URL |
+- `DISCORD_TOKEN` — Discord 봇 토큰
+- `DASHBOARD_PORT` — 웹 서버 포트, 기본 `3000`
+- `DASHBOARD_SECRET` — 관리자 대시보드 비밀번호
+- `DATABASE_URL` — Prisma DB URL
+- `AI_PROVIDER` — `codex`, `google`, `openai`, `anthropic`
+- `CODEX_HOME`, `CODEX_BIN`, `CODEX_MODEL`, `CODEX_TIMEOUT_MS` — Codex 실행 설정
+- `GOOGLE_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` — 선택 provider 키
+- `CODEX_IMAGE_TIMEOUT_MS` — Codex 이미지 생성 제한 시간
 
-비밀값은 README나 git에 커밋하지 말고 `.env`에만 둔다.
+비밀값은 git이나 문서에 넣지 않는다.
 
-## 실행
-
-### 로컬 개발
+## 실행과 검증
 
 ```bash
-npm run db:dev
 npm run dev
-```
-
-### 로컬 프로덕션 빌드
-
-```bash
-npm run db:migrate
-npm run build
-npm start
-```
-
-### Docker 개발
-
-```bash
-npm run docker:dev
-```
-
-`docker-compose.dev.yml`은 다음을 수행한다.
-- `npx prisma migrate deploy`
-- `npm run dev`
-- `./src`, `./prisma`, `./data`를 컨테이너에 마운트
-- 개발 DB: `file:/app/data/toro-dev.db`
-
-### Docker 검증
-
-```bash
-npm run docker:test
-```
-
-컨테이너 안에서 migration, typecheck, test, build를 순서대로 실행한다.
-
-### Docker 운영
-
-```bash
-npm run docker:prod
-```
-
-또는 직접:
-
-```bash
-docker compose up --build -d
-```
-
-운영 컨테이너 시작 시 Prisma는 `prisma migrate deploy`를 사용한다.
-`prisma db push`는 운영 시작 경로에서 사용하지 않는다.
-
-### NAS 운영 배포
-
-NAS 운영 경로는 `/volume1/docker/toro-bot`이고, 운영 이미지는 `dusehd1/toro-bot:latest`다.
-`main`에 push하면 GitHub Actions가 Docker Hub 이미지를 갱신하고, NAS의 Watchtower가 `toro-bot`을 pull/restart한다.
-
-Watchtower를 컨테이너 이름 지정 방식으로 쓸 때는 기존 `discord-bot` 대상명을 `toro-bot`으로 바꿔야 한다.
-
-```bash
-sudo docker rm -f watchtower
-sudo docker run -d \
-  --name watchtower \
-  --restart unless-stopped \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  containrrr/watchtower \
-  --cleanup \
-  --interval 30 \
-  toro-bot \
-  lovesick1
-```
-
-NAS compose에는 `container_name: toro-bot`과 Watchtower label을 둔다.
-
-```yaml
-labels:
-  com.centurylinklabs.watchtower.enable: "true"
-```
-
-Codex CLI provider는 API 키 대신 Codex 로그인 캐시를 사용한다. 컨테이너 안에서 device auth로 로그인하고 `/codex`에 세션을 저장한다.
-
-```bash
-sudo docker exec -it toro-bot sh -lc 'CODEX_HOME=/codex codex login --device-auth'
-sudo docker exec -it toro-bot sh -lc 'CODEX_HOME=/codex codex exec --skip-git-repo-check --sandbox read-only --output-last-message /tmp/codex-test.txt "Reply exactly: toro-ok" >/tmp/codex-test.log 2>&1 && cat /tmp/codex-test.txt'
-```
-
-운영 healthcheck는 인증이 필요한 `/api/status`가 아니라 public `/healthz`를 사용한다.
-
-```bash
-sudo docker exec -it toro-bot sh -lc 'curl -fsS http://localhost:${DASHBOARD_PORT:-3000}/healthz'
-```
-
-## 기본 사용 흐름
-
-1. Discord 서버에 TORO 봇을 초대한다.
-2. `@TORO`로 부르면 현재 Discord 서버가 팀으로 자동 연결된다.
-3. 팀 관리가 필요하면 웹 `/login`에서 Discord로 로그인한다.
-4. `/teams`에서 관리 가능한 서버의 팀과 멤버 상태를 확인한다.
-5. Discord에서는 `@TORO` 멘션과 `/draw`, `/play` 등 기능을 사용한다.
-6. 운영자는 `/admin`에서 봇 설정을 관리하고 `/admin/stored`에서 저장된 메모/대화를 확인한다.
-
-Discord Developer Portal의 OAuth2 Redirects에는 운영 기준
-`https://bot.yeonnnn.xyz/api/auth/discord/callback`을 등록한다.
-
-## 검증 명령
-
-```bash
-npx prisma validate
 npm run typecheck
 npm test
 npm run build
 cd frontend && npm run build
-npm audit --omit=dev
-npm audit
-cd frontend && npm audit
 ```
 
-## 운영 주의사항
+Docker:
 
-- 같은 Discord 서버에는 하나의 팀만 생성할 수 있다.
-- 기존 DB에 동일한 `guildId`를 가진 팀이 중복으로 있으면 unique migration이 실패할 수 있다. 배포 전 중복 데이터를 정리한다.
-- Google Calendar OAuth callback URL은 Google Cloud Console에 등록된 redirect URI와 `.env`의 `GOOGLE_REDIRECT_URI`가 일치해야 한다.
-- `/api/calendar/oauth/callback`은 public endpoint지만, signed state와 팀 관리자 권한 검증을 통과해야 연결된다.
-- `/admin`과 `/api/stored/*`는 `DASHBOARD_SECRET` 기반 인증이 필요하다.
+```bash
+npm run docker:test
+npm run docker:prod
+```
 
+운영 healthcheck:
 
-### Google Calendar OAuth URL
+```bash
+curl -fsS http://localhost:${DASHBOARD_PORT:-3000}/healthz
+```
 
-운영에서는 `TORO_PUBLIC_URL=https://bot.yeonnnn.xyz`를 설정하면 `GOOGLE_REDIRECT_URI`가 없을 때 `${TORO_PUBLIC_URL}/api/calendar/oauth/callback`을 자동 사용한다. Google Cloud Console에도 같은 callback URL을 등록해야 한다.
+## 배포
 
-
-### Media fallback behavior
-
-- `/draw` tries Codex CLI first and OpenAI image API second when `OPENAI_API_KEY` exists. If both are unavailable, it still returns a local SVG fallback card so the command does not hard-fail.
-- `/say` uses Python `edge-tts` by default, so it does not require `OPENAI_API_KEY`. OpenAI TTS is only used when explicitly configured or as a fallback with a key.
-
-
-### TORO public URL default
-
-NAS 기본 공개 URL은 `https://bot.yeonnnn.xyz`다. Google Calendar OAuth redirect URI는 `https://bot.yeonnnn.xyz/api/calendar/oauth/callback`을 Google Cloud Console에 등록한다.
-
-### RAG embeddings
-
-RAG는 팀별 `teamId` 메타데이터로 저장/검색된다. 기본 provider는 `google` + `gemini-embedding-001`이고, OpenAI API key를 쓰는 경우 `EMBEDDING_PROVIDER=openai`, `EMBEDDING_MODEL=text-embedding-3-small`로 바꿀 수 있다. Codex CLI에는 공식 embedding/vector API가 없어 RAG embedding backend로 직접 쓰지는 않는다. 웹 대시보드 `/admin/rag`에서 provider/model, 팀별 벡터 수, 최근 벡터, 검색, embedding health check를 확인한다.
+`main`에 push하면 GitHub Actions가 Docker 이미지를 갱신하고 NAS Watchtower가 `toro-bot` 컨테이너를 교체한다. 배포 후에는 `/healthz`, 실제 Discord 멘션, 명령어 목록, `/music` 화면을 확인한다.
