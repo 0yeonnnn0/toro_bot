@@ -11,16 +11,31 @@ export interface MusicLogEntry {
   url: string;
   duration: string;
   thumbnail: string;
-  requestedBy: string;
   timestamp: number;
+}
+
+type LegacyMusicLogEntry = MusicLogEntry & { requestedBy?: unknown };
+
+export function sanitizeMusicLogEntry(entry: LegacyMusicLogEntry): MusicLogEntry {
+  return {
+    id: entry.id,
+    title: entry.title,
+    artist: entry.artist,
+    url: entry.url,
+    duration: entry.duration,
+    thumbnail: entry.thumbnail,
+    timestamp: entry.timestamp,
+  };
 }
 
 let musicLogs: MusicLogEntry[] = [];
 
-// Load existing logs
 try {
   if (fs.existsSync(MUSIC_LOGS_FILE)) {
-    musicLogs = JSON.parse(fs.readFileSync(MUSIC_LOGS_FILE, "utf-8"));
+    const loaded = JSON.parse(fs.readFileSync(MUSIC_LOGS_FILE, "utf-8")) as LegacyMusicLogEntry[];
+    const containedRequesterIdentity = loaded.some(entry => Object.prototype.hasOwnProperty.call(entry, "requestedBy"));
+    musicLogs = loaded.map(sanitizeMusicLogEntry);
+    if (containedRequesterIdentity) saveLogs();
   }
 } catch (err) {
   console.error("음악 로그 로드 실패:", (err as Error).message);
@@ -52,34 +67,18 @@ export function getMusicLogs(limit = 100): MusicLogEntry[] {
 export function getMusicStats(): {
   totalPlays: number;
   topTracks: { title: string; artist: string | null; count: number }[];
-  topUsers: { name: string; count: number }[];
 } {
   const trackCounts = new Map<string, { title: string; artist: string | null; count: number }>();
-  const userCounts = new Map<string, number>();
 
   for (const log of musicLogs) {
-    // 곡 통계 — URL 기준 집계
     const existing = trackCounts.get(log.url);
-    if (existing) {
-      existing.count++;
-    } else {
-      trackCounts.set(log.url, { title: log.title, artist: log.artist, count: 1 });
-    }
-
-    // 유저 통계
-    if (!log.requestedBy.startsWith("Autoplay")) {
-      userCounts.set(log.requestedBy, (userCounts.get(log.requestedBy) || 0) + 1);
-    }
+    if (existing) existing.count++;
+    else trackCounts.set(log.url, { title: log.title, artist: log.artist, count: 1 });
   }
 
   const topTracks = [...trackCounts.values()]
     .sort((a, b) => b.count - a.count)
     .slice(0, 20);
 
-  const topUsers = [...userCounts.entries()]
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 10);
-
-  return { totalPlays: musicLogs.length, topTracks, topUsers };
+  return { totalPlays: musicLogs.length, topTracks };
 }

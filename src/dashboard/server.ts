@@ -2,8 +2,6 @@ import path from "path";
 import crypto from "crypto";
 import express from "express";
 import apiRoutes from "./routes/api";
-import webAuthRouter from "./routes/web-auth";
-import webTeamsRouter from "./routes/web-teams";
 import { state } from "../shared/state";
 
 const FRONTEND_DIR = path.join(__dirname, "../../frontend/dist");
@@ -38,13 +36,12 @@ export function createServer(): express.Application {
     res.json({ ok: true });
   });
 
-  // Discord 사용자용 로그인/팀 API는 각 라우트에서 별도 세션과 권한을 검증한다.
-  app.use("/api", webAuthRouter);
-  app.use("/api", webTeamsRouter);
 
   app.post("/api/login", (req, res) => {
     const secret = getSecret();
-    if (!secret || secret === "changeme") return res.json({ ok: true });
+    if (!secret || secret === "changeme") {
+      return res.status(503).json({ error: "dashboard secret is not configured" });
+    }
 
     const ip = req.ip || req.socket.remoteAddress || "unknown";
     if (isRateLimited(ip)) {
@@ -62,10 +59,11 @@ export function createServer(): express.Application {
 
   app.use("/api", (req, res, next) => {
     const secret = getSecret();
-    if (!secret || secret === "changeme") return next();
-    // Public chat endpoints - no auth required
-    if (req.path.startsWith("/chat/characters") || req.path.startsWith("/chat/send") || req.path.startsWith("/music-logs") || req.path.startsWith("/calendar/oauth/callback")) {
+    if (req.path.startsWith("/music-logs")) {
       return next();
+    }
+    if (!secret || secret === "changeme") {
+      return res.status(503).json({ error: "dashboard secret is not configured" });
     }
     const cookieHeader = req.headers.cookie || "";
     const sidMatch = cookieHeader.match(/sid=([^;]+)/);
@@ -75,6 +73,7 @@ export function createServer(): express.Application {
   });
 
   app.use("/api", apiRoutes);
+  app.use("/api", (_req, res) => res.status(404).json({ error: "not found" }));
   app.use(express.static(FRONTEND_DIR));
 
   app.get("*", (_req, res) => {
