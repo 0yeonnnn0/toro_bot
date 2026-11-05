@@ -35,6 +35,14 @@
 
 공개 음악 기록은 곡 정보만 제공하며 Discord 요청자 이름과 사용자 순위는 저장하거나 노출하지 않는다.
 
+### 공모전 DM 알림
+
+- `ysl-bots/Contest-Subscribe-IT`의 진행 중 IT·AI 공모전을 주기적으로 가져와 `OWNER_ID` 사용자에게 DM
+- `[관심 있어요]`는 관심 상태를 저장하고, `[관심 없어요]`는 해당 공모전을 영구 숨김
+- 버튼은 collector가 아니라 전역 interaction handler로 처리해 봇 재시작 후에도 작동
+- 같은 공모전은 한 번만 알리고, 마감된 공모전의 기존 DM은 자동 삭제
+- 기본 1일 1회·최대 5건이며 `.env`에서 Non-IT 저장소도 추가 가능
+
 ### 이미지
 
 - `/draw` 또는 자연어 이미지 요청
@@ -102,6 +110,11 @@ cp .env.example .env
 ```
 
 - `DISCORD_TOKEN` — Discord 봇 토큰
+- `OWNER_ID` — 공모전 DM을 받을 Discord 사용자 ID
+- `CONTEST_NOTIFICATIONS_ENABLED` — 공모전 알림 활성화, 기본 `true`
+- `CONTEST_REPOS` — `트랙:owner/repo` 목록, 기본 IT 저장소만 사용
+- `CONTEST_MAX_NOTIFICATIONS`, `CONTEST_POLL_INTERVAL_MS` — 회차당 DM 상한과 조회 주기
+- `CONTEST_GITHUB_TOKEN` — 선택 사항인 GitHub API 토큰
 - `DASHBOARD_PORT` — 웹 서버 포트, 기본 `3000`
 - `DASHBOARD_SECRET` — 관리자 대시보드 비밀번호
 - `DATABASE_URL` — Prisma DB URL
