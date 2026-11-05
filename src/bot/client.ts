@@ -1,8 +1,10 @@
-import { Client, GatewayIntentBits, ChatInputCommandInteraction, ActivityType } from "discord.js";
+import { Client, GatewayIntentBits, ChatInputCommandInteraction, ActivityType, MessageFlags, type InteractionReplyOptions } from "discord.js";
 import { state, addEvent, addError } from "../shared/state";
 import { registerCommands, handleInteraction, handleAutocomplete, handleMusicButton } from "./commands";
 import { stop as musicStop, setActivityCallback } from "./music";
 import { setupMessageHandler } from "./message-handler";
+import { handleContestButton } from "../contest/interaction";
+import { startContestNotifier } from "../contest/notifier";
 
 export const client = new Client({
   intents: [
@@ -27,6 +29,7 @@ client.once("ready", async () => {
 
   // 슬래시 커맨드 등록
   await registerCommands(client.user!.id, process.env.DISCORD_TOKEN || "");
+  startContestNotifier(client);
 });
 
 // 슬래시 커맨드 핸들러
@@ -39,9 +42,21 @@ client.on("interactionCreate", async (interaction) => {
     await handleInteraction(interaction as ChatInputCommandInteraction);
     return;
   }
-  if (interaction.isButton() && interaction.customId.startsWith("music_")) {
-    await handleMusicButton(interaction);
-    return;
+  if (interaction.isButton()) {
+    try {
+      if (await handleContestButton(interaction)) return;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      addError("contest_interaction", message);
+      const response: InteractionReplyOptions = { content: "공모전 상태 저장에 실패했다냥. 잠시 후 다시 눌러줘.", flags: MessageFlags.Ephemeral };
+      if (interaction.deferred || interaction.replied) await interaction.followUp(response).catch(() => undefined);
+      else await interaction.reply(response).catch(() => undefined);
+      return;
+    }
+    if (interaction.customId.startsWith("music_")) {
+      await handleMusicButton(interaction);
+      return;
+    }
   }
 });
 

@@ -16,11 +16,11 @@ model Team {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members       TeamMember[]
-  invites       TeamInvite[]
-  conversations Conversation[]
-  memos         Memo[]
-  calendar      TeamCalendarConnection?
+  members          TeamMember[]
+  invites          TeamInvite[]
+  conversations    Conversation[]
+  memos            Memo[]
+  calendar         TeamCalendarConnection?
   activeSelections ActiveTeamSelection[]
 }
 
@@ -39,7 +39,7 @@ model TeamMember {
 }
 
 model ActiveTeamSelection {
-  discordUserId String @id
+  discordUserId String   @id
   teamId        String
   updatedAt     DateTime @updatedAt
 
@@ -68,7 +68,7 @@ model Conversation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  team     Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  team     Team                  @relation(fields: [teamId], references: [id], onDelete: Cascade)
   messages ConversationMessage[]
 
   @@unique([teamId, guildId, channelId])
@@ -111,14 +111,82 @@ model Memo {
 model TeamCalendarConnection {
   id                       String   @id @default(cuid())
   teamId                   String   @unique
-  googleAccountEmail        String?
+  googleAccountEmail       String?
   calendarId               String
-  encryptedRefreshToken     String
-  connectedByDiscordUserId  String
+  encryptedRefreshToken    String
+  connectedByDiscordUserId String
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+}
+
+model Contest {
+  id             String        @id @default(cuid())
+  canonicalKey   String        @unique
+  title          String
+  host           String?
+  category       String?
+  applyEnd       String
+  sourceUrl      String
+  sourceIssueUrl String
+  summary        String?
+  track          String
+  status         ContestStatus @default(ACTIVE)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  preferences   ContestPreference[]
+  notifications ContestNotification[]
+
+  @@index([status, applyEnd])
+}
+
+model ContestPreference {
+  id        String                  @id @default(cuid())
+  userId    String
+  contestId String
+  status    ContestPreferenceStatus
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+
+  contest Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contestId])
+  @@index([userId, status])
+}
+
+model ContestNotification {
+  id        String    @id @default(cuid())
+  userId    String
+  contestId String
+  channelId String?
+  messageId String?
+  sentAt    DateTime?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  contest Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contestId])
+  @@index([contestId, deletedAt])
+}
+
+model ContestNotifierState {
+  userId        String   @id
+  quotaDate     String
+  reservedCount Int      @default(0)
+  updatedAt     DateTime @updatedAt
+}
+
+enum ContestStatus {
+  ACTIVE
+  EXPIRED
+}
+
+enum ContestPreferenceStatus {
+  INTERESTED
+  IGNORED
 }
 
 enum TeamRole {
