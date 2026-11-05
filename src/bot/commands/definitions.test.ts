@@ -2,6 +2,13 @@ import { describe, expect, it } from "vitest";
 import { commands } from "./definitions";
 
 describe("registered Discord commands", () => {
+  it("registers channel contest subscription controls", () => {
+    const contest = commands.find(command => command.name === "공모전")?.toJSON();
+
+    expect(contest).toBeDefined();
+    expect(contest?.options?.map(option => option.name)).toEqual(["시작", "중지", "상태"]);
+  });
+
   it("uses mentions as the only direct AI question entrypoint", () => {
     const names = commands.map(command => command.name);
 

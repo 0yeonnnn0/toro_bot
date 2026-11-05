@@ -10,6 +10,13 @@ export const commands = [
     .setDescription("봇 상태 확인"),
 
   new SlashCommandBuilder()
+    .setName("공모전")
+    .setDescription("현재 채널이나 스레드의 공모전 알림 관리")
+    .addSubcommand(opt => opt.setName("시작").setDescription("이곳에 공모전 알림을 공유하기 시작"))
+    .addSubcommand(opt => opt.setName("중지").setDescription("이곳의 공모전 알림 중지"))
+    .addSubcommand(opt => opt.setName("상태").setDescription("이곳의 공모전 알림 상태 확인")),
+
+  new SlashCommandBuilder()
     .setName("mute")
     .setDescription("현재 채널에서 TORO 멘션 응답 잠시 끄기/다시 켜기")
     .addIntegerOption(opt =>

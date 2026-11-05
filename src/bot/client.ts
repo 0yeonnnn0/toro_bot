@@ -39,7 +39,15 @@ client.on("interactionCreate", async (interaction) => {
     return;
   }
   if (interaction.isChatInputCommand()) {
-    await handleInteraction(interaction as ChatInputCommandInteraction);
+    try {
+      await handleInteraction(interaction as ChatInputCommandInteraction);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      addError("command_interaction", message);
+      const response: InteractionReplyOptions = { content: "명령 처리에 실패했다냥. 잠시 후 다시 시도해줘.", flags: MessageFlags.Ephemeral };
+      if (interaction.deferred || interaction.replied) await interaction.followUp(response).catch(() => undefined);
+      else await interaction.reply(response).catch(() => undefined);
+    }
     return;
   }
   if (interaction.isButton()) {

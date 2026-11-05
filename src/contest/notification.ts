@@ -48,26 +48,39 @@ export function buildContestMessage(contest: StoredContest): MessageCreateOption
   return { embeds: [embed], components: [row], allowedMentions: { parse: [] } };
 }
 
-export async function runContestNotificationCycle(input: {
+export async function cleanupExpiredContestNotifications(input: {
   today: string;
-  userId: string;
-  maxNotifications: number;
-  source: ContestSource;
   store: ContestCycleStore;
   messenger: ContestMessenger;
-}): Promise<{ discovered: number; expired: number; sent: number; failures: number; sourceFailed: boolean }> {
-  let failures = 0;
+}): Promise<{ deleted: number; failures: number }> {
   const expired = await input.store.expireBefore(input.today);
   let deleted = 0;
+  let failures = 0;
   for (const notification of expired) {
     try {
-      await input.messenger.deleteMessage(notification.userId, notification.channelId, notification.messageId);
+      await input.messenger.deleteMessage(notification.targetId, notification.channelId, notification.messageId);
       await input.store.markNotificationDeleted(notification.id);
       deleted += 1;
     } catch {
       failures += 1;
     }
   }
+  return { deleted, failures };
+}
+
+export async function runContestNotificationCycle(input: {
+  today: string;
+  targetId: string;
+  maxNotifications: number;
+  source: ContestSource;
+  store: ContestCycleStore;
+  messenger: ContestMessenger;
+  skipExpirationCleanup?: boolean;
+}): Promise<{ discovered: number; expired: number; sent: number; failures: number; sourceFailed: boolean }> {
+  const cleanup = input.skipExpirationCleanup
+    ? { deleted: 0, failures: 0 }
+    : await cleanupExpiredContestNotifications(input);
+  let failures = cleanup.failures;
 
   let contests = [] as Awaited<ReturnType<ContestSource["fetchActiveContests"]>>;
   let sourceFailed = false;
@@ -78,20 +91,20 @@ export async function runContestNotificationCycle(input: {
     sourceFailed = true;
   }
 
-  const candidates = await input.store.listNotificationCandidates(input.userId, input.today, input.maxNotifications);
+  const candidates = await input.store.listNotificationCandidates(input.targetId, input.today, input.maxNotifications);
   const slots = await input.store.reserveDailySlots(
-    input.userId,
+    input.targetId,
     input.today,
     input.maxNotifications,
     candidates.length,
   );
   let sent = 0;
   for (const contest of candidates.slice(0, slots)) {
-    const claimId = await input.store.claimNotification(input.userId, contest.id);
+    const claimId = await input.store.claimNotification(input.targetId, contest.id);
     if (!claimId) continue;
     let message: Awaited<ReturnType<ContestMessenger["sendContest"]>>;
     try {
-      message = await input.messenger.sendContest(input.userId, contest);
+      message = await input.messenger.sendContest(input.targetId, contest);
     } catch {
       await input.store.releaseNotificationClaim(claimId);
       failures += 1;
@@ -101,10 +114,10 @@ export async function runContestNotificationCycle(input: {
       await input.store.completeNotification(claimId, message.channelId, message.messageId);
       sent += 1;
     } catch {
-      // DM 전송 뒤 기록 실패는 중복 발송보다 누락을 택해 claim을 유지한다.
+      // Discord 게시 뒤 기록 실패는 중복 게시보다 누락을 택해 claim을 유지한다.
       failures += 1;
     }
   }
 
-  return { discovered: contests.length, expired: deleted, sent, failures, sourceFailed };
+  return { discovered: contests.length, expired: cleanup.deleted, sent, failures, sourceFailed };
 }

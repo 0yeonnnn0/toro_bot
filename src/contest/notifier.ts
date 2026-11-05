@@ -1,8 +1,16 @@
 import type { Client } from "discord.js";
 import { addError, addEvent } from "../shared/state";
-import { buildContestMessage, runContestNotificationCycle } from "./notification";
+import {
+  buildContestMessage,
+  cleanupExpiredContestNotifications,
+  runContestNotificationCycle,
+} from "./notification";
 import { GithubIssueContestSource } from "./source";
-import { contestStore } from "./store";
+import {
+  contestStore,
+  getContestSubscription,
+  listActiveContestSubscriptions,
+} from "./store";
 import type { ContestMessenger, StoredContest } from "./types";
 
 function kstDate(now = new Date()): string {
@@ -16,18 +24,22 @@ function kstDate(now = new Date()): string {
   return `${value.year}-${value.month}-${value.day}`;
 }
 
-class DiscordContestMessenger implements ContestMessenger {
+export class DiscordChannelContestMessenger implements ContestMessenger {
   constructor(private readonly client: Client) {}
 
-  async sendContest(userId: string, contest: StoredContest): Promise<{ channelId: string; messageId: string }> {
-    const user = await this.client.users.fetch(userId);
-    const message = await user.send(buildContestMessage(contest));
+  async sendContest(targetId: string, contest: StoredContest): Promise<{ channelId: string; messageId: string }> {
+    const channel = await this.client.channels.fetch(targetId);
+    if (!channel || !channel.isSendable()) throw new Error(`공모전 알림을 보낼 수 없는 채널: ${targetId}`);
+    const message = await channel.send({
+      content: "관심: 아직 없음",
+      ...buildContestMessage(contest),
+    });
     return { channelId: message.channelId, messageId: message.id };
   }
 
-  async deleteMessage(userId: string, _channelId: string, messageId: string): Promise<void> {
-    const user = await this.client.users.fetch(userId);
-    const channel = await user.createDM();
+  async deleteMessage(_targetId: string, channelId: string, messageId: string): Promise<void> {
+    const channel = await this.client.channels.fetch(channelId);
+    if (!channel || !channel.isTextBased()) throw new Error(`공모전 알림을 삭제할 수 없는 채널: ${channelId}`);
     try {
       const message = await channel.messages.fetch(messageId);
       await message.delete();
@@ -38,42 +50,67 @@ class DiscordContestMessenger implements ContestMessenger {
   }
 }
 
-export function startContestNotifier(client: Client): void {
-  if (process.env.CONTEST_NOTIFICATIONS_ENABLED?.trim().toLowerCase() === "false") return;
-  const userId = process.env.OWNER_ID?.trim();
-  if (!userId) {
-    addEvent("contest_disabled", "OWNER_ID가 없어 공모전 DM 알림을 시작하지 않음");
-    return;
+function maxNotifications(): number {
+  return Math.min(20, Math.max(1, Number.parseInt(process.env.CONTEST_MAX_NOTIFICATIONS || "5", 10) || 5));
+}
+
+const runningTargets = new Set<string>();
+
+export async function runContestNotifierNow(
+  client: Client,
+  channelId: string,
+  options: { skipExpirationCleanup?: boolean } = {},
+) {
+  const subscription = await getContestSubscription(channelId);
+  if (!subscription?.enabled || runningTargets.has(channelId)) {
+    return { discovered: 0, expired: 0, sent: 0, failures: 0, sourceFailed: false };
+  }
+  runningTargets.add(channelId);
+  try {
+    return await runContestNotificationCycle({
+      today: kstDate(),
+      targetId: channelId,
+      maxNotifications: maxNotifications(),
+      source: new GithubIssueContestSource(),
+      store: contestStore,
+      messenger: new DiscordChannelContestMessenger(client),
+      skipExpirationCleanup: options.skipExpirationCleanup,
+    });
+  } finally {
+    runningTargets.delete(channelId);
+  }
+}
+
+export async function runContestNotifierPass(client: Client): Promise<void> {
+  const messenger = new DiscordChannelContestMessenger(client);
+  const cleanup = await cleanupExpiredContestNotifications({
+    today: kstDate(),
+    store: contestStore,
+    messenger,
+  });
+  if (cleanup.deleted > 0 || cleanup.failures > 0) {
+    addEvent("contest_cleanup", `만료 삭제 ${cleanup.deleted}건 · 실패 ${cleanup.failures}건`);
   }
 
-  const maxNotifications = Math.min(20, Math.max(1, Number.parseInt(process.env.CONTEST_MAX_NOTIFICATIONS || "5", 10) || 5));
-  const intervalMs = Math.max(60_000, Number.parseInt(process.env.CONTEST_POLL_INTERVAL_MS || "86400000", 10) || 86_400_000);
-  const source = new GithubIssueContestSource();
-  const messenger = new DiscordContestMessenger(client);
-  let running = false;
-
-  const run = async () => {
-    if (running) return;
-    running = true;
+  const subscriptions = await listActiveContestSubscriptions();
+  for (const subscription of subscriptions) {
     try {
-      const result = await runContestNotificationCycle({
-        today: kstDate(),
-        userId,
-        maxNotifications,
-        source,
-        store: contestStore,
-        messenger,
-      });
-      addEvent("contest_cycle", `수집 ${result.discovered}건 · 만료 삭제 ${result.expired}건 · DM ${result.sent}건 · 실패 ${result.failures}건${result.sourceFailed ? " · 소스 조회 실패" : ""}`);
+      const result = await runContestNotifierNow(client, subscription.channelId, { skipExpirationCleanup: true });
+      addEvent(
+        "contest_cycle",
+        `채널 ${subscription.channelId} · 수집 ${result.discovered}건 · 게시 ${result.sent}건 · 실패 ${result.failures}건${result.sourceFailed ? " · 소스 조회 실패" : ""}`,
+      );
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      addError("contest", message);
-    } finally {
-      running = false;
+      addError("contest", error instanceof Error ? error.message : String(error));
     }
-  };
+  }
+}
 
-  void run();
-  const timer = setInterval(() => void run(), intervalMs);
+export function startContestNotifier(client: Client): void {
+  if (process.env.CONTEST_NOTIFICATIONS_ENABLED?.trim().toLowerCase() === "false") return;
+  const intervalMs = Math.max(60_000, Number.parseInt(process.env.CONTEST_POLL_INTERVAL_MS || "86400000", 10) || 86_400_000);
+
+  void runContestNotifierPass(client);
+  const timer = setInterval(() => void runContestNotifierPass(client), intervalMs);
   timer.unref();
 }

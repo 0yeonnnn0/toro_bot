@@ -19,7 +19,7 @@ export interface StoredContest extends ContestCandidate {
 
 export interface ExpiredNotification {
   id: string;
-  userId: string;
+  targetId: string;
   channelId: string;
   messageId: string;
 }
@@ -27,9 +27,9 @@ export interface ExpiredNotification {
 export interface ContestCycleStore {
   upsertMany(contests: ContestCandidate[]): Promise<void>;
   expireBefore(today: string): Promise<ExpiredNotification[]>;
-  listNotificationCandidates(userId: string, today: string, limit: number): Promise<StoredContest[]>;
-  reserveDailySlots(userId: string, today: string, maxPerDay: number, requested: number): Promise<number>;
-  claimNotification(userId: string, contestId: string): Promise<string | null>;
+  listNotificationCandidates(targetId: string, today: string, limit: number): Promise<StoredContest[]>;
+  reserveDailySlots(targetId: string, today: string, maxPerDay: number, requested: number): Promise<number>;
+  claimNotification(targetId: string, contestId: string): Promise<string | null>;
   completeNotification(notificationId: string, channelId: string, messageId: string): Promise<void>;
   releaseNotificationClaim(notificationId: string): Promise<void>;
   markNotificationDeleted(notificationId: string): Promise<void>;
@@ -40,6 +40,13 @@ export interface ContestSource {
 }
 
 export interface ContestMessenger {
-  sendContest(userId: string, contest: StoredContest): Promise<{ channelId: string; messageId: string }>;
-  deleteMessage(userId: string, channelId: string, messageId: string): Promise<void>;
+  sendContest(targetId: string, contest: StoredContest): Promise<{ channelId: string; messageId: string }>;
+  deleteMessage(targetId: string, channelId: string, messageId: string): Promise<void>;
+}
+
+export interface ContestSubscriptionRecord {
+  channelId: string;
+  guildId: string;
+  createdByUserId: string;
+  enabled: boolean;
 }

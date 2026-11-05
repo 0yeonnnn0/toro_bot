@@ -144,6 +144,7 @@ model Contest {
 
 model ContestPreference {
   id        String                  @id @default(cuid())
+  targetId  String                  @default("legacy")
   userId    String
   contestId String
   status    ContestPreferenceStatus
@@ -152,13 +153,14 @@ model ContestPreference {
 
   contest Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, contestId])
+  @@unique([targetId, userId, contestId])
+  @@index([targetId, contestId, status])
   @@index([userId, status])
 }
 
 model ContestNotification {
   id        String    @id @default(cuid())
-  userId    String
+  targetId  String    @map("userId")
   contestId String
   channelId String?
   messageId String?
@@ -168,15 +170,27 @@ model ContestNotification {
 
   contest Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, contestId])
+  @@unique([targetId, contestId], map: "ContestNotification_userId_contestId_key")
   @@index([contestId, deletedAt])
 }
 
 model ContestNotifierState {
-  userId        String   @id
+  targetId      String   @id @map("userId")
   quotaDate     String
   reservedCount Int      @default(0)
   updatedAt     DateTime @updatedAt
+}
+
+model ContestSubscription {
+  id              String   @id @default(cuid())
+  channelId       String   @unique
+  guildId         String
+  createdByUserId String
+  enabled         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([enabled])
 }
 
 enum ContestStatus {
