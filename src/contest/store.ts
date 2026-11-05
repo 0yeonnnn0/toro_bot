@@ -1,6 +1,13 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db/client";
-import type { ContestCandidate, ContestPreferenceStatus, ContestCycleStore, ExpiredNotification, StoredContest } from "./types";
+import type {
+  ContestCandidate,
+  ContestCycleStore,
+  ContestPreferenceStatus,
+  ContestSubscriptionRecord,
+  ExpiredNotification,
+  StoredContest,
+} from "./types";
 
 function toStoredContest(row: {
   id: string;
@@ -49,7 +56,7 @@ export const contestStore: ContestCycleStore = {
         id: true,
         notifications: {
           where: { deletedAt: null, channelId: { not: null }, messageId: { not: null } },
-          select: { id: true, userId: true, channelId: true, messageId: true },
+          select: { id: true, targetId: true, channelId: true, messageId: true },
         },
       },
     });
@@ -60,13 +67,12 @@ export const contestStore: ContestCycleStore = {
     ));
   },
 
-  async listNotificationCandidates(userId: string, today: string, limit: number): Promise<StoredContest[]> {
+  async listNotificationCandidates(targetId: string, today: string, limit: number): Promise<StoredContest[]> {
     const rows = await prisma.contest.findMany({
       where: {
         status: "ACTIVE",
         applyEnd: { gte: today },
-        preferences: { none: { userId, status: "IGNORED" } },
-        notifications: { none: { userId } },
+        notifications: { none: { targetId } },
       },
       orderBy: [{ applyEnd: "asc" }, { createdAt: "asc" }],
       take: limit,
@@ -74,23 +80,23 @@ export const contestStore: ContestCycleStore = {
     return rows.map(toStoredContest);
   },
 
-  async reserveDailySlots(userId: string, today: string, maxPerDay: number, requested: number): Promise<number> {
+  async reserveDailySlots(targetId: string, today: string, maxPerDay: number, requested: number): Promise<number> {
     return prisma.$transaction(async (tx) => {
-      const current = await tx.contestNotifierState.findUnique({ where: { userId } });
+      const current = await tx.contestNotifierState.findUnique({ where: { targetId } });
       const used = current?.quotaDate === today ? current.reservedCount : 0;
       const slots = Math.max(0, Math.min(requested, maxPerDay - used));
       await tx.contestNotifierState.upsert({
-        where: { userId },
-        create: { userId, quotaDate: today, reservedCount: slots },
+        where: { targetId },
+        create: { targetId, quotaDate: today, reservedCount: slots },
         update: { quotaDate: today, reservedCount: used + slots },
       });
       return slots;
     });
   },
 
-  async claimNotification(userId: string, contestId: string): Promise<string | null> {
+  async claimNotification(targetId: string, contestId: string): Promise<string | null> {
     try {
-      const claim = await prisma.contestNotification.create({ data: { userId, contestId } });
+      const claim = await prisma.contestNotification.create({ data: { targetId, contestId } });
       return claim.id;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return null;
@@ -117,17 +123,68 @@ export const contestStore: ContestCycleStore = {
   },
 };
 
-export async function hasContestNotification(userId: string, contestId: string, messageId: string): Promise<boolean> {
+export async function hasContestNotification(targetId: string, contestId: string, messageId: string): Promise<boolean> {
   const count = await prisma.contestNotification.count({
-    where: { userId, contestId, messageId, deletedAt: null },
+    where: { targetId, contestId, messageId, deletedAt: null },
   });
   return count > 0;
 }
 
-export async function setContestPreference(userId: string, contestId: string, status: ContestPreferenceStatus): Promise<void> {
+export async function setContestPreference(
+  targetId: string,
+  userId: string,
+  contestId: string,
+  status: ContestPreferenceStatus,
+): Promise<void> {
   await prisma.contestPreference.upsert({
-    where: { userId_contestId: { userId, contestId } },
-    create: { userId, contestId, status },
+    where: { targetId_userId_contestId: { targetId, userId, contestId } },
+    create: { targetId, userId, contestId, status },
     update: { status },
+  });
+}
+
+export async function listInterestedUserIds(targetId: string, contestId: string): Promise<string[]> {
+  const rows = await prisma.contestPreference.findMany({
+    where: { targetId, contestId, status: "INTERESTED" },
+    orderBy: { updatedAt: "asc" },
+    select: { userId: true },
+    take: 20,
+  });
+  return rows.map((row) => row.userId);
+}
+
+export async function upsertContestSubscription(input: {
+  channelId: string;
+  guildId: string;
+  createdByUserId: string;
+}): Promise<ContestSubscriptionRecord> {
+  return prisma.contestSubscription.upsert({
+    where: { channelId: input.channelId },
+    create: { ...input, enabled: true },
+    update: { guildId: input.guildId, createdByUserId: input.createdByUserId, enabled: true },
+    select: { channelId: true, guildId: true, createdByUserId: true, enabled: true },
+  });
+}
+
+export async function disableContestSubscription(channelId: string): Promise<boolean> {
+  const result = await prisma.contestSubscription.updateMany({
+    where: { channelId, enabled: true },
+    data: { enabled: false },
+  });
+  return result.count > 0;
+}
+
+export async function getContestSubscription(channelId: string): Promise<ContestSubscriptionRecord | null> {
+  return prisma.contestSubscription.findUnique({
+    where: { channelId },
+    select: { channelId: true, guildId: true, createdByUserId: true, enabled: true },
+  });
+}
+
+export async function listActiveContestSubscriptions(): Promise<ContestSubscriptionRecord[]> {
+  return prisma.contestSubscription.findMany({
+    where: { enabled: true },
+    orderBy: { createdAt: "asc" },
+    select: { channelId: true, guildId: true, createdByUserId: true, enabled: true },
   });
 }

@@ -30,6 +30,10 @@ export async function handleHelp(interaction: ChatInputCommandInteraction): Prom
         value: "`/draw` — AI 이미지 생성",
       },
       {
+        name: "🏆 공모전",
+        value: "`/공모전 시작` · `중지` · `상태` — 현재 채널·스레드의 공모전 알림 관리",
+      },
+      {
         name: "⚙️ 채널 설정",
         value: [
           "`/status` — 봇 상태 확인",

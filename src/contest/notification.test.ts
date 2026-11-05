@@ -44,7 +44,7 @@ describe("contest notifications", () => {
 
   it("cleans up before fetching, reserves the daily quota, and claims before sending", async () => {
     const contestStore = store({
-      expireBefore: vi.fn().mockResolvedValue([{ id: "notification_1", userId: "owner", channelId: "dm", messageId: "old" }]),
+      expireBefore: vi.fn().mockResolvedValue([{ id: "notification_1", targetId: "owner", channelId: "dm", messageId: "old" }]),
       listNotificationCandidates: vi.fn().mockResolvedValue([{ ...contest, id: "contest_1" }]),
     });
     const source = { fetchActiveContests: vi.fn().mockResolvedValue([contest]) };
@@ -55,7 +55,7 @@ describe("contest notifications", () => {
 
     const result = await runContestNotificationCycle({
       today: "2026-11-05",
-      userId: "owner",
+      targetId: "owner",
       maxNotifications: 5,
       source,
       store: contestStore,
@@ -77,8 +77,8 @@ describe("contest notifications", () => {
     const second = { ...contest, id: "contest_2", canonicalKey: "two", sourceUrl: "https://linkareer.com/activity/2" };
     const contestStore = store({
       expireBefore: vi.fn().mockResolvedValue([
-        { id: "expired_1", userId: "owner", channelId: "dm", messageId: "missing" },
-        { id: "expired_2", userId: "owner", channelId: "dm", messageId: "exists" },
+        { id: "expired_1", targetId: "owner", channelId: "dm", messageId: "missing" },
+        { id: "expired_2", targetId: "owner", channelId: "dm", messageId: "exists" },
       ]),
       listNotificationCandidates: vi.fn().mockResolvedValue([first, second]),
       claimNotification: vi.fn().mockResolvedValueOnce("claim_1").mockResolvedValueOnce("claim_2"),
@@ -90,7 +90,7 @@ describe("contest notifications", () => {
 
     const result = await runContestNotificationCycle({
       today: "2026-11-05",
-      userId: "owner",
+      targetId: "owner",
       maxNotifications: 5,
       source: { fetchActiveContests: vi.fn().mockRejectedValue(new Error("GitHub unavailable")) },
       store: contestStore,
@@ -111,7 +111,7 @@ describe("contest notifications", () => {
 
     const result = await runContestNotificationCycle({
       today: "2026-11-05",
-      userId: "owner",
+      targetId: "owner",
       maxNotifications: 5,
       source: { fetchActiveContests: vi.fn().mockResolvedValue([]) },
       store: contestStore,

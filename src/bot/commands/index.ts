@@ -8,6 +8,7 @@ import { handleSummary } from "./chat";
 import { handleHelp, handleStatus } from "./settings";
 import { handleDraw } from "./media";
 import { handleMute, handleMuteStatus } from "./mute";
+import { handleContestCommand } from "./contest";
 import {
   handlePlay, handleSkip, handleStop, handlePause,
   handleQueueCmd, handleNowPlaying, handleVolume,
@@ -42,6 +43,9 @@ export async function handleInteraction(interaction: ChatInputCommandInteraction
       break;
     case "status":
       await handleStatus(interaction);
+      break;
+    case "공모전":
+      await handleContestCommand(interaction);
       break;
     case "mute":
       await handleMute(interaction);
