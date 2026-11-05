@@ -41,16 +41,6 @@ export function extractImageSearchQuery(text: string): string {
   return cleaned || text.replace(/<@!?\d+>/g, " ").trim();
 }
 
-function decodeHtmlEntities(text: string): string {
-  return text
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-}
-
 function extractVqd(html: string): string | null {
   return html.match(/vqd=['"]([^'"]+)['"]/)?.[1]
     ?? html.match(/vqd=([^&"']+)/)?.[1]
@@ -61,10 +51,22 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}): Promise<Re
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    return await fetch(url, { ...init, signal: controller.signal });
+    return await fetch(url, { ...init, signal: controller.signal, redirect: "error" });
   } finally {
     clearTimeout(timer);
   }
+}
+
+export function buildDuckDuckGoImageProxyUrl(sourceUrl: string): string {
+  const source = new URL(sourceUrl);
+  if (source.protocol !== "http:" && source.protocol !== "https:") {
+    throw new Error("unsupported image URL protocol");
+  }
+  const proxy = new URL("https://external-content.duckduckgo.com/iu/");
+  proxy.searchParams.set("u", source.toString());
+  proxy.searchParams.set("f", "1");
+  proxy.searchParams.set("nofb", "1");
+  return proxy.toString();
 }
 
 async function searchDuckDuckGoImages(query: string): Promise<Candidate[]> {
@@ -91,50 +93,19 @@ async function searchDuckDuckGoImages(query: string): Promise<Candidate[]> {
   const data = await res.json() as { results?: Array<{ image?: string; url?: string; title?: string }> };
   return (data.results ?? [])
     .map((item) => ({ imageUrl: item.image || "", pageUrl: item.url, title: item.title }))
-    .filter((item) => item.imageUrl.startsWith("http"));
-}
-
-async function searchPageOgImages(query: string): Promise<Candidate[]> {
-  const res = await fetchWithTimeout(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
-    headers: { "User-Agent": "Mozilla/5.0 (compatible; ToroBot/1.0)" },
-  });
-  if (!res.ok) return [];
-
-  const html = await res.text();
-  const blocks = html.split(/<div class="result results_links/gi).slice(1, 6);
-  const pageUrls = blocks.flatMap((block) => {
-    const match = block.match(/<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
-    if (!match) return [];
-    try {
-      const url = new URL(decodeHtmlEntities(match[1]), "https://duckduckgo.com");
-      const uddg = url.searchParams.get("uddg");
-      return [{ pageUrl: uddg ? decodeURIComponent(uddg) : url.toString(), title: decodeHtmlEntities(match[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim()) }];
-    } catch {
-      return [];
-    }
-  });
-
-  const candidates: Candidate[] = [];
-  for (const page of pageUrls) {
-    try {
-      const pageRes = await fetchWithTimeout(page.pageUrl, {
-        headers: { "User-Agent": "Mozilla/5.0 (compatible; ToroBot/1.0)" },
-      });
-      const contentType = pageRes.headers.get("content-type") || "";
-      if (!pageRes.ok || !contentType.includes("text/html")) continue;
-      const pageHtml = await pageRes.text();
-      const imageUrl = pageHtml.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1]
-        ?? pageHtml.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)?.[1];
-      if (!imageUrl) continue;
-      candidates.push({ imageUrl: new URL(decodeHtmlEntities(imageUrl), page.pageUrl).toString(), pageUrl: page.pageUrl, title: page.title });
-    } catch {}
-  }
-  return candidates;
+    .filter((item) => {
+      try {
+        return ["http:", "https:"].includes(new URL(item.imageUrl).protocol);
+      } catch {
+        return false;
+      }
+    });
 }
 
 async function downloadImage(candidate: Candidate): Promise<ImageSearchResult | null> {
   try {
-    const res = await fetchWithTimeout(candidate.imageUrl, {
+    const proxyUrl = buildDuckDuckGoImageProxyUrl(candidate.imageUrl);
+    const res = await fetchWithTimeout(proxyUrl, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; ToroBot/1.0)" },
     });
     if (!res.ok) return null;
@@ -164,10 +135,7 @@ export async function searchImageAttachment(query: string): Promise<ImageSearchR
   const cleanQuery = query.trim();
   if (!cleanQuery) return null;
 
-  const candidates = [
-    ...(await searchDuckDuckGoImages(cleanQuery).catch(() => [])),
-    ...(await searchPageOgImages(`${cleanQuery} 사진`).catch(() => [])),
-  ];
+  const candidates = await searchDuckDuckGoImages(cleanQuery).catch(() => []);
 
   const seen = new Set<string>();
   for (const candidate of candidates) {

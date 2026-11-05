@@ -1,12 +1,8 @@
 import "dotenv/config";
 import { start as startBot } from "./bot/client";
 import { createServer } from "./dashboard/server";
-import { initIndex } from "./bot/rag";
-import { initVault } from "./bot/vault";
 
 async function main(): Promise<void> {
-  await initIndex();
-  initVault();
   await startBot();
 
   const port = parseInt(process.env.DASHBOARD_PORT || "3000");

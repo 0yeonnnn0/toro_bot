@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { client } from "../../bot/client";
 import { state, saveState } from "../../shared/state";
 import { getQueueStats } from "../../bot/queue";
-import { DEFAULT_JUDGE_PROMPT } from "../../bot/ai";
+
 import { maskKey } from "../../shared/keys";
 
 const router = Router();
@@ -23,10 +23,10 @@ router.get("/status", (_req: Request, res: Response) => {
   });
 });
 
-router.get("/config", (_req: Request, res: Response) => res.json({ ...safeConfig(), defaultJudgePrompt: DEFAULT_JUDGE_PROMPT }));
+router.get("/config", (_req: Request, res: Response) => res.json(safeConfig()));
 
 router.put("/config", (req: Request, res: Response) => {
-  const { aiProvider, model, replyMode, judgeInterval, judgeThreshold } = req.body;
+  const { aiProvider, model } = req.body;
   if (aiProvider !== undefined) {
     if (!["codex", "google", "openai", "anthropic"].includes(aiProvider)) {
       return res.status(400).json({ error: "잘못된 aiProvider" });
@@ -34,37 +34,11 @@ router.put("/config", (req: Request, res: Response) => {
     state.config.aiProvider = aiProvider;
   }
   if (model !== undefined) state.config.model = model;
-  if (replyMode !== undefined) {
-    if (!["auto", "interval", "mute"].includes(replyMode)) {
-      return res.status(400).json({ error: "replyMode는 auto, interval, mute 중 하나" });
-    }
-    state.config.replyMode = replyMode;
-  }
-  if (judgeInterval !== undefined) {
-    const v = parseInt(judgeInterval);
-    if (isNaN(v) || v < 10 || v > 600) return res.status(400).json({ error: "judgeInterval은 10~600초" });
-    state.config.judgeInterval = v;
-  }
-  if (judgeThreshold !== undefined) {
-    const v = parseInt(judgeThreshold);
-    if (isNaN(v) || v < 1 || v > 50) return res.status(400).json({ error: "judgeThreshold는 1~50" });
-    state.config.judgeThreshold = v;
-  }
-  if (req.body.judgePrompt !== undefined) {
-    state.config.judgePrompt = req.body.judgePrompt;
-  }
-  if (req.body.webShowNickname !== undefined) {
-    state.config.webShowNickname = !!req.body.webShowNickname;
-  }
-  if (req.body.webSystemPrompt !== undefined) {
-    state.config.webSystemPrompt = req.body.webSystemPrompt;
-  }
+
   if (req.body.imageRecognition !== undefined) {
     state.config.imageRecognition = !!req.body.imageRecognition;
   }
-  if (req.body.passiveLogging !== undefined) {
-    state.config.passiveLogging = !!req.body.passiveLogging;
-  }
+
   res.json(safeConfig());
 });
 

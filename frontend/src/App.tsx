@@ -1,28 +1,18 @@
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import { Toaster } from './components/ui/sonner'
 import Nav from './components/Nav'
 import Dashboard from './pages/Dashboard'
 import Logs from './pages/Logs'
 import Settings from './pages/Settings'
 import Login from './pages/Login'
-import Chat from './pages/Chat'
 import Music from './pages/Music'
-import Stored from './pages/Stored'
-import Rag from './pages/Rag'
-import DiscordLogin from './pages/DiscordLogin'
-import Teams from './pages/Teams'
 
 function AdminLayout({ children }: { children: React.ReactNode }) {
   const [authed, setAuthed] = useState<boolean | null>(null)
 
   useEffect(() => {
-    fetch('/api/status')
-      .then(res => {
-        if (res.status === 401) setAuthed(false)
-        else { setAuthed(true); return res.json() }
-      })
-      .catch(() => setAuthed(false))
+    fetch('/api/status').then(response => setAuthed(response.status !== 401)).catch(() => setAuthed(false))
   }, [])
 
   if (authed === null) return null
@@ -37,34 +27,19 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
-  const location = useLocation()
-  const isChat = location.pathname.startsWith('/chat')
-
   return (
     <>
       <Routes>
-        {/* Public pages */}
-        <Route path="/chat" element={<Chat />} />
         <Route path="/music" element={<Music />} />
-        <Route path="/login" element={<DiscordLogin />} />
-        <Route path="/teams" element={<Teams />} />
-
-        {/* Admin login */}
         <Route path="/admin/login" element={<Login />} />
-
-        {/* Admin pages */}
         <Route path="/admin" element={<AdminLayout><Dashboard /></AdminLayout>} />
         <Route path="/admin/logs" element={<AdminLayout><Logs /></AdminLayout>} />
-        <Route path="/admin/stored" element={<AdminLayout><Stored /></AdminLayout>} />
-        <Route path="/admin/rag" element={<AdminLayout><Rag /></AdminLayout>} />
         <Route path="/admin/settings" element={<AdminLayout><Settings /></AdminLayout>} />
         <Route path="/admin/music" element={<AdminLayout><Music editable /></AdminLayout>} />
-
-        {/* Redirects */}
-        <Route path="/" element={<Navigate to="/chat" replace />} />
-        <Route path="*" element={<Navigate to="/chat" replace />} />
+        <Route path="/" element={<Navigate to="/music" replace />} />
+        <Route path="*" element={<Navigate to="/music" replace />} />
       </Routes>
-      {!isChat && <Toaster position="top-right" />}
+      <Toaster position="top-right" />
     </>
   )
 }

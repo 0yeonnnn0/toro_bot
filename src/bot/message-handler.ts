@@ -1,24 +1,17 @@
-import { PermissionFlagsBits, type AttachmentBuilder, type Client, type Message } from "discord.js";
+import { type AttachmentBuilder, type Client, type Message } from "discord.js";
 import { getReply, lastUsedModel } from "./ai";
-import { resolveTeamContext } from "../team/context";
-import { TeamLoginRequiredError, TeamSelectionRequiredError } from "../team/errors";
-import { appendConversationMessage, getRecentConversationHistory } from "../ai/conversation-store";
-import { routeToroMessage } from "../ai/router";
-import * as history from "./history";
-import * as rag from "./rag";
-import { state, addLog, addError, trackUser, trackKeywords } from "../shared/state";
+import { state, addLog, addError } from "../shared/state";
 import { enqueue, markUserRequest } from "./queue";
-import { fetchUrlContext, fetchWebSearchContext } from "./scrape";
+import { fetchWebSearchContext } from "./scrape";
 import { getMentionContextHistory } from "./channel-context";
-import { getUserContext, extractAndSave } from "./vault";
 import { isChannelMuted } from "./commands/mute";
 import type { ImageData } from "./history";
 import { extractImagePrompt, generateImage, isImageGenerationRequest } from "./draw";
 import { extractImageSearchQuery, isImageSearchRequest, searchImageAttachment } from "./image-search";
+import { getMessagePolicy } from "./message-policy";
 
 const IMAGE_FAILURE_MESSAGE = "이미지 생성에 실패했다냥... @д@";
 
-// @이름 → <@유저ID> 변환
 function resolveMentions(text: string, message: Message): string {
   const guild = message.guild;
   if (!guild) return text;
@@ -31,7 +24,7 @@ function resolveMentions(text: string, message: Message): string {
 }
 
 const IMAGE_MIMES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
-const MAX_IMAGE_SIZE = 4 * 1024 * 1024; // 4MB
+const MAX_IMAGE_SIZE = 4 * 1024 * 1024;
 
 async function extractImage(message: Message): Promise<ImageData | undefined> {
   if (!state.config.imageRecognition) return undefined;
@@ -48,19 +41,13 @@ async function extractImage(message: Message): Promise<ImageData | undefined> {
   }
 }
 
-const conversationBuffer = new Map<string, { content: string }[]>();
-const BUFFER_SIZE = 5;
-
-// ── Message deduplication ──
 const recentMessages = new Set<string>();
-const DEDUP_TTL = 10_000; // 10s
-// 멘션 메시지 처리 중 추적 (동시 실행 방지)
+const DEDUP_TTL = 10_000;
 const processingMentions = new Set<string>();
 
 type MentionResponse = string | {
   content: string;
   files?: AttachmentBuilder[];
-  assistantContent?: string;
 };
 
 function isDuplicate(messageId: string): boolean {
@@ -70,204 +57,91 @@ function isDuplicate(messageId: string): boolean {
   return false;
 }
 
-// ── Setup ──
 let handlerRegistered = false;
 export function setupMessageHandler(client: Client): void {
   if (handlerRegistered) {
-    console.error(`[WARN] setupMessageHandler가 2번 호출됨! 중복 등록 방지.`);
+    console.error("[WARN] setupMessageHandler가 2번 호출됨! 중복 등록 방지.");
     return;
   }
   handlerRegistered = true;
   console.log(`[INIT] messageCreate 핸들러 등록, 기존 리스너 수: ${client.listenerCount("messageCreate")}`);
 
   client.on("messageCreate", async (message: Message) => {
-    if (message.author.bot) return;
-    if (isDuplicate(message.id)) {
-      console.log(`[DEDUP] 중복 메시지 무시: id=${message.id} author=${message.author.displayName}`);
-      return;
-    }
+    if (message.author.bot || isDuplicate(message.id)) return;
+
     const channelId = message.channel.id;
     const guildName = message.guild?.name || "DM";
     const channelName = "name" in message.channel ? (message.channel as any).name as string : "unknown";
     const cleanContent = message.content.replace(/<@!?\d+>/g, "").trim();
-
-    const imageData = await extractImage(message);
-
     const isMentioned = message.mentions.has(client.user!);
-    console.log(`[MSG] id=${message.id} mention=${isMentioned} channel=${channelName} author=${message.author.displayName} content="${cleanContent.slice(0, 30)}"`);
-    if (isMentioned && isChannelMuted(channelId)) {
-      console.log(`[MUTE] 멘션 응답 무시: channel=${channelName} id=${message.id}`);
-      return;
-    }
-    const shouldLog = isMentioned;
+    const policy = getMessagePolicy({ isMentioned, isMuted: isChannelMuted(channelId) });
 
-    history.addMessage(channelId, {
-      role: "user",
-      content: `${message.author.displayName}: ${cleanContent}${imageData ? " [이미지 첨부]" : ""}`,
-      discordUserId: message.author.id,
-      displayName: message.author.displayName,
-      imageData,
-    });
+    if (!policy.shouldReply) return;
 
-    if (shouldLog) {
-      state.stats.messagesProcessed++;
-      trackKeywords(cleanContent);
-
-      if (!conversationBuffer.has(channelId)) {
-        conversationBuffer.set(channelId, []);
-      }
-      const buffer = conversationBuffer.get(channelId)!;
-      buffer.push({ content: `${message.author.displayName}: ${cleanContent}` });
-      if (buffer.length >= BUFFER_SIZE) {
-        rag.storeConversation({
-          channel: channelName,
-          messages: buffer.splice(0),
-          timestamp: Date.now(),
-        });
-      }
-
-      // 멘션은 멘션 핸들러에서 로그를 남기므로 여기서는 비멘션만 기록
-      if (!isMentioned) {
-        addLog({
-          guild: guildName,
-          channel: channelName,
-          author: message.author.displayName,
-          content: cleanContent,
-          botReplied: false,
-          triggerReason: null,
-          botReply: null,
-          responseTime: null,
-          ragHits: 0,
-          error: null,
-          model: null,
-        });
-      }
-    }
-
-    // 일반 채팅은 최근 히스토리에만 두고, 자동 끼어들기/RAG 장기 저장은 하지 않는다.
-    if (!isMentioned) {
-      return;
-    }
-
-    // ── Mentioned: always reply ──
-    if (processingMentions.has(message.id)) {
-      console.error(`[MENTION:DUPLICATE] id=${message.id} 이미 처리 중! 스킵`);
-      return;
-    }
+    if (processingMentions.has(message.id)) return;
     processingMentions.add(message.id);
     setTimeout(() => processingMentions.delete(message.id), 60_000);
 
-    console.log(`[MENTION] id=${message.id} channel=${channelName} author=${message.author.displayName}`);
-    trackUser(message.author.id, message.author.displayName, true);
+    const imageData = await extractImage(message);
+    state.stats.messagesProcessed++;
     markUserRequest(message.author.id);
     if ("sendTyping" in message.channel) (message.channel as any).sendTyping().catch(() => {});
 
     const startTime = Date.now();
     let replySent = false;
-    console.log(`[MENTION:START] id=${message.id} timestamp=${startTime}`);
 
     try {
-      let ragHitCount = 0;
       const reply = await enqueue(async () => {
-        let teamContext;
-        try {
-          teamContext = await resolveTeamContext({
-            guildId: message.guildId,
-            guildName: message.guild?.name,
-            guildOwnerId: message.guild?.ownerId,
-            discordUserId: message.author.id,
-            displayName: message.author.displayName,
-            canManageGuild: message.member?.permissions.has(PermissionFlagsBits.ManageGuild) ?? false,
-          });
-        } catch (err) {
-          if (err instanceof TeamLoginRequiredError || err instanceof TeamSelectionRequiredError) return err.message;
-          throw err;
-        }
-        await appendConversationMessage({ teamId: teamContext.team.id, guildId: message.guildId, channelId, role: "user", content: `${message.author.displayName}: ${cleanContent}${imageData ? " [이미지 첨부]" : ""}`, discordUserId: message.author.id, displayName: message.author.displayName, discordMessageId: message.id });
-        rag.storeConversation({
-          teamId: teamContext.team.id,
-          channel: channelName,
-          messages: [{ content: `${message.author.displayName}: ${cleanContent}${imageData ? " [이미지 첨부]" : ""}` }],
-          timestamp: Date.now(),
-        });
-        let teamHistory = await getMentionContextHistory(message, cleanContent, imageData, client.user?.id);
-        if (teamHistory.length === 0) {
-          teamHistory = await getRecentConversationHistory({ teamId: teamContext.team.id, guildId: message.guildId, channelId });
-        }
-        let ragResults: any[] = [];
-        try {
-          ragResults = await rag.searchRelevant(cleanContent, 3, { teamId: teamContext.team.id });
-        } catch {}
-        ragHitCount = ragResults.length;
-        const urlContext = await fetchUrlContext(cleanContent);
+        const requestHistory = await getMentionContextHistory(message, cleanContent, imageData, client.user?.id);
         const webSearchContext = await fetchWebSearchContext(cleanContent);
-        const userIdentity = { discordUserId: message.author.id, displayName: message.author.displayName };
-        const vaultContext = getUserContext(userIdentity);
-        const ragContext = rag.formatContext(ragResults) + urlContext + webSearchContext + vaultContext;
+        const requestContext = webSearchContext;
+
         if (isImageSearchRequest(cleanContent)) {
           const imageQuery = extractImageSearchQuery(cleanContent);
           const result = await searchImageAttachment(imageQuery);
           if (!result) return "사진 검색 결과를 못 가져왔다냥... @д@";
-
           const content = `**${imageQuery}** 사진 가져왔다냥${result.pageUrl ? `\n출처: ${result.pageUrl}` : ""}`;
-          await appendConversationMessage({ teamId: teamContext.team.id, guildId: message.guildId, channelId, role: "assistant", content });
-          return { content, files: [result.attachment], assistantContent: content };
+          return { content, files: [result.attachment] };
         }
+
         if (isImageGenerationRequest(cleanContent)) {
           const imagePrompt = extractImagePrompt(cleanContent);
           const result = await generateImage(imagePrompt, "flash");
-          if (!result) {
-            return IMAGE_FAILURE_MESSAGE;
-          }
+          if (!result) return IMAGE_FAILURE_MESSAGE;
           const label = result.provider === "codex" ? "codex image" : "openai image";
-          const content = `**${imagePrompt}** (${label})`;
-          await appendConversationMessage({ teamId: teamContext.team.id, guildId: message.guildId, channelId, role: "assistant", content });
-          return { content, files: [result.attachment], assistantContent: content };
+          return { content: `**${imagePrompt}** (${label})`, files: [result.attachment] };
         }
 
-        const mentionIds = [...message.mentions.users.keys()].filter((id) => id !== client.user?.id);
-        const routedReply = await routeToroMessage({ teamContext, content: cleanContent, mentions: mentionIds, history: teamHistory, source: { guildId: message.guildId, channelId, messageId: message.id }, chat: (conversationHistory) => getReply(conversationHistory, ragContext, message.author.id) });
-        await appendConversationMessage({ teamId: teamContext.team.id, guildId: message.guildId, channelId, role: "assistant", content: routedReply });
-        return routedReply;
+        return getReply(requestHistory, requestContext, message.author.id);
       });
 
-      const responseTime = Date.now() - startTime;
-
       if (!reply) return;
-
       const response = reply as MentionResponse;
       const rawContent = typeof response === "string" ? response : response.content;
       const resolved = resolveMentions(rawContent, message);
-      console.log(`[MENTION:REPLY] id=${message.id} replySent=${replySent} reply="${resolved.slice(0, 50)}"`);
+
       if (typeof response === "string") {
         await message.reply(resolved);
       } else {
         await message.reply({ content: resolved, files: response.files ?? [] });
       }
       replySent = true;
-      console.log(`[MENTION:SENT] id=${message.id} replySent=true`);
-      history.addMessage(channelId, { role: "assistant", content: typeof response === "string" ? response : (response.assistantContent ?? rawContent) });
       state.stats.repliesSent++;
-
-      // Background: extract user info from conversation
-      const extractHistory = history.getHistory(channelId);
-      extractAndSave({ discordUserId: message.author.id, displayName: message.author.displayName }, extractHistory).catch(() => {});
 
       addLog({
         guild: guildName,
         channel: channelName,
-        author: message.author.displayName,
-        content: cleanContent,
+        author: "[discord user]",
+        content: "[ephemeral mention]",
         botReplied: true,
         triggerReason: "mention",
-        botReply: resolved,
-        responseTime,
-        ragHits: ragHitCount,
+        botReply: null,
+        responseTime: Date.now() - startTime,
+        ragHits: 0,
         error: null,
         model: lastUsedModel,
       });
     } catch (err) {
-      console.error(`[MENTION:CATCH:ENTRY] id=${message.id} replySent=${replySent} error="${(err as Error).message?.slice(0, 100)}"`);
       const responseTime = Date.now() - startTime;
       const isRateLimit = (err as Error).message?.includes("429") || (err as Error).message?.includes("quota");
 
@@ -276,12 +150,11 @@ export function setupMessageHandler(client: Client): void {
         (err as Error).message,
         `channel: ${channelName}, guild: ${guildName}`
       );
-
       addLog({
         guild: guildName,
         channel: channelName,
-        author: message.author.displayName,
-        content: cleanContent,
+        author: "[discord user]",
+        content: "[ephemeral mention]",
         botReplied: false,
         triggerReason: "mention",
         botReply: null,
@@ -291,9 +164,6 @@ export function setupMessageHandler(client: Client): void {
         model: null,
       });
 
-      console.error(`[MENTION:CATCH] id=${message.id} replySent=${replySent} error="${(err as Error).message}"`);
-      // 에러 시 Discord에 에러 메시지를 보내지 않음 — 정상 응답이 별도로 도착하는 경우가 있어 중복 방지
-      // 레이트 리밋일 때만 유저에게 알림
       if (!replySent && isRateLimit) {
         await message.reply("오늘은 너무 많이 떠들었다냥... 내일 다시 돌아온다냥! >w<").catch(() => {});
       }

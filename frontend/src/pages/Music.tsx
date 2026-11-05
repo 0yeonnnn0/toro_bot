@@ -8,14 +8,12 @@ interface MusicLogEntry {
   url: string
   duration: string
   thumbnail: string
-  requestedBy: string
   timestamp: number
 }
 
 interface MusicStats {
   totalPlays: number
   topTracks: { title: string; artist: string | null; count: number }[]
-  topUsers: { name: string; count: number }[]
 }
 
 interface QueueTrack {
@@ -160,7 +158,7 @@ export default function Music({ editable = false }: { editable?: boolean }) {
     <div className="stagger">
       <div className="page-header">
         <h1>Music</h1>
-        <p className="page-desc">현재 재생 중인 큐와 재생 기록을 관리합니다 — 10초 간격 갱신</p>
+        <p className="page-desc">요청자 정보 없이 현재 큐와 재생 기록을 관리합니다 — 10초 간격 갱신</p>
       </div>
 
       <div className="card-grid stagger" style={{ marginBottom: 'var(--space-8)' }}>
@@ -299,14 +297,13 @@ export default function Music({ editable = false }: { editable?: boolean }) {
                 <TableHead style={{ width: 72 }}>Image</TableHead>
                 <TableHead>Track</TableHead>
                 <TableHead style={{ width: 90 }}>Duration</TableHead>
-                <TableHead style={{ width: 140 }}>Requested</TableHead>
                 <TableHead style={{ width: 110 }}>Played</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {paged.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} style={{ textAlign: 'center', padding: 'var(--space-10)', color: 'var(--text-tertiary)' }}>
+                  <TableCell colSpan={5} style={{ textAlign: 'center', padding: 'var(--space-10)', color: 'var(--text-tertiary)' }}>
                     재생 기록이 없습니다
                   </TableCell>
                 </TableRow>
@@ -321,11 +318,6 @@ export default function Music({ editable = false }: { editable?: boolean }) {
                     {log.artist && <div className="hint">{log.artist}</div>}
                   </TableCell>
                   <TableCell className="mono">{log.duration}</TableCell>
-                  <TableCell>
-                    <span className={`log-badge ${log.requestedBy.startsWith('Autoplay') ? 'event' : 'mention'}`}>
-                      {log.requestedBy.startsWith('Autoplay') ? 'Auto' : log.requestedBy}
-                    </span>
-                  </TableCell>
                   <TableCell className="hint">{formatTime(log.timestamp)}</TableCell>
                 </TableRow>
               ))}
@@ -375,32 +367,7 @@ export default function Music({ editable = false }: { editable?: boolean }) {
               )}
             </div>
 
-            <div className="panel">
-              <div className="panel-header">
-                <div className="panel-title">Top Users</div>
-                <span className="panel-badge">{stats.topUsers.length}</span>
-              </div>
-              {stats.topUsers.length === 0 ? <div className="empty">데이터가 없습니다</div> : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead style={{ width: 56 }}>#</TableHead>
-                      <TableHead>User</TableHead>
-                      <TableHead style={{ width: 80 }}>Count</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {stats.topUsers.map((u, i) => (
-                      <TableRow key={`${u.name}-${i}`}>
-                        <TableCell><span className={`rank-num ${i === 0 ? 'top-1' : i === 1 ? 'top-2' : i === 2 ? 'top-3' : 'default'}`}>{i + 1}</span></TableCell>
-                        <TableCell style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{u.name}</TableCell>
-                        <TableCell className="mono text-accent">{u.count}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
+
           </div>
         </div>
       )}

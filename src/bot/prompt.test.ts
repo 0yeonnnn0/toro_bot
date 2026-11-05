@@ -2,16 +2,17 @@ import { describe, it, expect } from "vitest";
 import { getPresets, getPreset, getActivePresetId, setActivePreset, getActivePrompt, buildPromptWithCustom } from "./prompt";
 
 describe("prompt presets", () => {
-  it("should have default presets", () => {
+  it("exposes only the fixed TORO persona", () => {
     const presets = getPresets();
-    expect(presets.length).toBeGreaterThan(0);
-    expect(presets.find(p => p.id === "neko")).toBeTruthy();
+    expect(presets.map(p => p.id)).toEqual(["neko"]);
+    expect(getPreset("yeonnnn")).toBeNull();
+    expect(getPreset("youngjun")).toBeNull();
   });
 
   it("should get a preset by id", () => {
     const neko = getPreset("neko");
     expect(neko).toBeTruthy();
-    expect(neko!.name).toBe("AI비서 TORO");
+    expect(neko!.name).toBe("TORO");
     expect(neko!.prompt).toContain("TORO");
   });
 

@@ -14,4 +14,19 @@ describe("registered Discord commands", () => {
     expect(names).not.toContain("login");
     expect(names).not.toContain("team");
   });
+
+  it("does not expose persistent memory or calendar commands", () => {
+    const names = commands.map(command => command.name);
+
+    expect(names).not.toContain("calendar");
+    expect(names).not.toContain("내정보");
+  });
+
+  it("keeps media focused on images and party music", () => {
+    const names = commands.map(command => command.name);
+
+    expect(names).not.toContain("say");
+    expect(names).toContain("draw");
+    expect(names).toContain("play");
+  });
 });

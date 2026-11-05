@@ -10,9 +10,7 @@ docker compose logs -f --tail=100
 
 SQLite DB는 `./data:/app/data` 볼륨에 저장된다. Compose 파일은 `DATABASE_URL` 기본값을 `file:/app/data/toro.db`로 제공한다. 컨테이너 시작 시 `prisma migrate deploy` 후 앱을 시작한다. ffmpeg와 yt-dlp가 이미지에 포함된다.
 
-캘린더 OAuth 토큰 암호화 키는 `.env`에 `TOKEN_ENCRYPTION_KEY`를 직접 넣지 않아도 된다. production에서 값이 없으면 컨테이너가 `/app/data/token-encryption.key`를 자동 생성한다. `./data:/app/data` 볼륨이 유지되면 재시작/업데이트 후에도 같은 키를 사용한다. 이 파일을 잃어버리면 기존 캘린더 refresh token을 복호화할 수 없으므로 `data/` 백업 대상에 포함한다.
-
-채팅 기본 AI는 OpenAI API 키가 아니라 Codex CLI 연결을 사용한다. 컨테이너는 `CODEX_HOME=/codex`를 읽고, compose는 호스트의 `${CODEX_HOME_HOST:-./codex}`를 `/codex`로 마운트한다. NAS에서는 Codex CLI 로그인을 한 뒤 `auth.json`/`config.toml`을 `/volume1/docker/toro-bot/codex/` 아래에 두거나, `.env`에 `CODEX_HOME_HOST=/path/to/.codex`를 지정한다. Codex CLI가 세션 토큰을 갱신할 수 있어야 하므로 이 마운트는 read-write다. `GOOGLE_API_KEY`는 Codex 실패 시 Gemini fallback과 RAG용으로만 유지한다. `/draw`는 Codex CLI/ChatGPT 로그인 세션을 우선 사용하고, `OPENAI_API_KEY`가 있으면 OpenAI image API를 fallback으로 사용한다.
+채팅 기본 AI는 OpenAI API 키가 아니라 Codex CLI 연결을 사용한다. 컨테이너는 `CODEX_HOME=/codex`를 읽고, compose는 호스트의 `${CODEX_HOME_HOST:-./codex}`를 `/codex`로 마운트한다. NAS에서는 Codex CLI 로그인을 한 뒤 `auth.json`/`config.toml`을 `/volume1/docker/toro-bot/codex/` 아래에 두거나, `.env`에 `CODEX_HOME_HOST=/path/to/.codex`를 지정한다. Codex CLI가 세션 토큰을 갱신할 수 있어야 하므로 이 마운트는 read-write다. `GOOGLE_API_KEY`는 Codex 실패 시 Gemini fallback에만 사용한다. `/draw`는 Codex CLI/ChatGPT 로그인 세션을 우선 사용하고, `OPENAI_API_KEY`가 있으면 OpenAI image API를 fallback으로 사용한다.
 
 
 ## Discord 권한과 멘션 맥락
@@ -25,7 +23,7 @@ TORO는 기본적으로 일반 대화에 자동으로 끼어들지 않고, `@TOR
 - 서버/채널 권한: `View Channel`, `Read Message History`, `Send Messages`
 - 스레드 권한: `Send Messages in Threads`, `Read Message History`
 
-URL이 포함된 메시지는 페이지 내용을 읽고, 검색/최신/뉴스/가격/추천/비교/어떻게 생각 등 최신 정보가 필요해 보이는 멘션은 웹 검색 결과를 추가 맥락으로 붙인다. 웹 검색은 외부 검색 HTML 표면을 쓰므로 실패해도 답변 자체는 RAG/대화 맥락만으로 계속 진행한다.
+검색/최신/뉴스/가격/추천/비교 등 최신 정보가 필요해 보이는 멘션은 고정된 검색 서비스의 결과를 추가 맥락으로 붙인다. Discord 사용자가 제공한 임의 URL은 서버 내부망 접근 위험을 막기 위해 직접 가져오지 않는다. 검색이 실패해도 답변 자체는 현재 Discord 대화 맥락만으로 계속 진행한다.
 
 ## NAS 영구 이름 전환: discord-bot → toro-bot
 

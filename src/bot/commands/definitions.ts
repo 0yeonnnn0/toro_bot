@@ -4,28 +4,6 @@ export const commands = [
   new SlashCommandBuilder()
     .setName("help")
     .setDescription("TORO 사용 가이드"),
-  new SlashCommandBuilder()
-    .setName("calendar")
-    .setDescription("팀 Google Calendar 관리")
-    .addSubcommand(sub => sub.setName("connect").setDescription("팀 캘린더 연결 링크 생성"))
-    .addSubcommand(sub => sub.setName("status").setDescription("팀 캘린더 연결 상태 확인"))
-    .addSubcommand(sub => sub.setName("disconnect").setDescription("팀 캘린더 연결 해제"))
-    .addSubcommand(sub =>
-      sub.setName("list")
-        .setDescription("팀 일정 조회")
-        .addStringOption(opt => opt.setName("range").setDescription("오늘|이번주|다음주").addChoices(
-          { name: "오늘", value: "오늘" },
-          { name: "이번주", value: "이번주" },
-          { name: "다음주", value: "다음주" },
-        ))
-    )
-    .addSubcommand(sub =>
-      sub.setName("add")
-        .setDescription("팀 일정 추가")
-        .addStringOption(opt => opt.setName("title").setDescription("일정 제목").setRequired(true))
-        .addStringOption(opt => opt.setName("date").setDescription("날짜").setRequired(true))
-        .addStringOption(opt => opt.setName("time").setDescription("시간"))
-    ),
 
   new SlashCommandBuilder()
     .setName("status")
@@ -65,32 +43,6 @@ export const commands = [
           { name: "GPT High (고품질)", value: "pro" },
         )
     ),
-
-  new SlashCommandBuilder()
-    .setName("say")
-    .setDescription("봇이 음성으로 답변해줘 (TTS)")
-    .addStringOption(opt =>
-      opt.setName("message").setDescription("말할 내용").setRequired(true)
-    )
-    .addStringOption(opt =>
-      opt.setName("voice").setDescription("음성 선택")
-        .addChoices(
-          { name: "Kore (여성, 차분)", value: "kore" },
-          { name: "Aoede (여성, 밝음)", value: "aoede" },
-          { name: "Leda (여성, 따뜻)", value: "leda" },
-          { name: "Puck (남성, 활발)", value: "puck" },
-          { name: "Charon (남성, 낮음)", value: "charon" },
-          { name: "Fenrir (남성, 부드러움)", value: "fenrir" },
-        )
-    ),
-
-  new SlashCommandBuilder()
-    .setName("내정보")
-    .setDescription("봇이 기억하는 내 정보 확인")
-    .addUserOption(opt =>
-      opt.setName("user").setDescription("다른 유저 정보 확인 (선택)")
-    ),
-
 
 
   // ── Music ──

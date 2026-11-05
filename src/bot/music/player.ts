@@ -389,7 +389,6 @@ export async function playNext(guildId: string): Promise<void> {
       url: track.url,
       duration: track.duration,
       thumbnail: trackThumbnailUrl(track.thumbnail, track.url),
-      requestedBy: track.requestedBy,
     });
 
     // 다음 곡 프리페치
