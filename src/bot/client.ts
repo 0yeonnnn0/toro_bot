@@ -28,7 +28,11 @@ client.once("ready", async () => {
   });
 
   // 슬래시 커맨드 등록
-  await registerCommands(client.user!.id, process.env.DISCORD_TOKEN || "");
+  await registerCommands(
+    client.user!.id,
+    process.env.DISCORD_TOKEN || "",
+    [...client.guilds.cache.keys()],
+  );
   startContestNotifier(client);
 });
 
@@ -68,7 +72,12 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
-client.on("guildCreate", (guild) => addEvent("guild_join", `${guild.name} (${guild.memberCount}명)`));
+client.on("guildCreate", async (guild) => {
+  addEvent("guild_join", `${guild.name} (${guild.memberCount}명)`);
+  if (client.user) {
+    await registerCommands(client.user.id, process.env.DISCORD_TOKEN || "", [guild.id]);
+  }
+});
 
 // ── 음성 채널: 유저 전부 나가면 봇도 퇴장 ──
 client.on("voiceStateUpdate", (oldState, newState) => {

@@ -19,16 +19,26 @@ export { commands } from "./definitions";
 export { handleMusicButton } from "./music";
 
 // ── Register Commands ──
-export async function registerCommands(clientId: string, token: string): Promise<void> {
+export async function registerCommands(clientId: string, token: string, guildIds: string[] = []): Promise<void> {
   const rest = new REST({ version: "10" }).setToken(token);
-  try {
-    console.log("슬래시 커맨드 등록 중...");
-    await rest.put(Routes.applicationCommands(clientId), {
-      body: commands.map(c => c.toJSON()),
-    });
-    console.log("슬래시 커맨드 등록 완료");
-  } catch (err) {
-    console.error("슬래시 커맨드 등록 실패:", (err as Error).message);
+  const body = commands.map(c => c.toJSON());
+  console.log("슬래시 커맨드 등록 중...");
+
+  const targets = [
+    { label: "global", route: Routes.applicationCommands(clientId) },
+    ...guildIds.map(guildId => ({
+      label: `guild:${guildId}`,
+      route: Routes.applicationGuildCommands(clientId, guildId),
+    })),
+  ];
+
+  for (const target of targets) {
+    try {
+      await rest.put(target.route, { body });
+      console.log(`슬래시 커맨드 등록 완료: ${target.label}`);
+    } catch (err) {
+      console.error(`슬래시 커맨드 등록 실패: ${target.label}:`, (err as Error).message);
+    }
   }
 }
 
