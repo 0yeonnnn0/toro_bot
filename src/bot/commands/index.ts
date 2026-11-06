@@ -25,16 +25,17 @@ export async function registerCommands(clientId: string, token: string, guildIds
   console.log("슬래시 커맨드 등록 중...");
 
   const targets = [
-    { label: "global", route: Routes.applicationCommands(clientId) },
+    { label: "global:clear", route: Routes.applicationCommands(clientId), body: [] },
     ...guildIds.map(guildId => ({
       label: `guild:${guildId}`,
       route: Routes.applicationGuildCommands(clientId, guildId),
+      body,
     })),
   ];
 
   for (const target of targets) {
     try {
-      await rest.put(target.route, { body });
+      await rest.put(target.route, { body: target.body });
       console.log(`슬래시 커맨드 등록 완료: ${target.label}`);
     } catch (err) {
       console.error(`슬래시 커맨드 등록 실패: ${target.label}:`, (err as Error).message);
