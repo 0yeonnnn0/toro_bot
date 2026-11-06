@@ -28,8 +28,14 @@ describe("Discord command registration", () => {
   it("registers commands globally and immediately in every joined guild", async () => {
     await registerCommands("app_1", "token", ["guild_1", "guild_2"]);
 
-    expect(mocks.put).toHaveBeenCalledWith("/applications/app_1/commands", expect.any(Object));
-    expect(mocks.put).toHaveBeenCalledWith("/applications/app_1/guilds/guild_1/commands", expect.any(Object));
-    expect(mocks.put).toHaveBeenCalledWith("/applications/app_1/guilds/guild_2/commands", expect.any(Object));
+    expect(mocks.put).toHaveBeenCalledWith("/applications/app_1/commands", { body: [] });
+    expect(mocks.put).toHaveBeenCalledWith(
+      "/applications/app_1/guilds/guild_1/commands",
+      expect.objectContaining({ body: expect.arrayContaining([expect.objectContaining({ name: "공모전" })]) }),
+    );
+    expect(mocks.put).toHaveBeenCalledWith(
+      "/applications/app_1/guilds/guild_2/commands",
+      expect.objectContaining({ body: expect.arrayContaining([expect.objectContaining({ name: "공모전" })]) }),
+    );
   });
 });
